@@ -179,6 +179,16 @@
     results: Result[];
   } = $props();
 
+  // Abbreviations of the paper's model table.
+  const familyShortLabels: Record<string, string> = {
+    attn: "Attn",
+    cnn: "CNN",
+    dense: "Dense",
+    fe: "FE",
+    graph: "Graph",
+    rnn: "RNN",
+    spec: "Spec",
+  };
   const familyPartsById: Record<string, string[]> = {
     attn_cnn_dense: ["attn", "cnn", "dense"],
     attn_cnn_dense_rnn: ["attn", "cnn", "dense", "rnn"],
@@ -208,7 +218,7 @@
   let selectedDetailModelId = $state<string | null>(null);
   let selectedDetailDatasetId = $state<string | null>(null);
   let activeView = $state<ViewId>("leaderboard");
-  let selectedDevice = $state<DeviceId>("phone");
+  let selectedDevice = $state<DeviceId>("mcu");
   let matrixSelection = $state<"macro_f1" | CostKey>("macro_f1");
   let selectedCost = $state<CostKey>("latency");
   let scatterScale = $state<ScatterScale>("log");
@@ -437,11 +447,14 @@
       }))
       .sort((a, b) => (b.share ?? -1) - (a.share ?? -1)),
   );
+  const selectedDetailRow = $derived(rows.find((row) => row.id === selectedDetailModelId) ?? null);
   const netImprovementScale = $derived(getNetImprovementScale(rows));
   const activeScatterConfig = $derived(
     scatterConfigs.find((config) => config.metric === activeScatterMetric) ?? scatterConfigs[0],
   );
   const scatterPlot = $derived(createScatterPlot(activeScatterConfig, scatterScale));
+  const scatterLabels = $derived(placeScatterLabels(scatterPlot));
+  const scatterLegend = $derived([...scatterPlot.points].sort((a, b) => b.y - a.y));
   const matrixMetric = $derived<"macro_f1" | DeploymentMetric>(
     matrixSelection === "macro_f1"
       ? "macro_f1"
@@ -891,7 +904,7 @@
     selectedModelIds = catalog.models.map((item) => item.id);
     selectedModelFamilyIds = getModelFamilyIds(catalog.models);
     selectedWindowSizeSeconds = defaultWindowSizeSeconds;
-    selectedDevice = "phone";
+    selectedDevice = "mcu";
     componentMatchMode = "inclusive";
   }
 
@@ -1481,6 +1494,68 @@
     };
   }
 
+  /** Name the models on the front, at the first spot that hits no other label or marker. */
+  function placeScatterLabels(chart: ScatterPlot) {
+    const charWidth = 7.2;
+    const height = 15;
+    const markers = chart.points.map((point) => ({ x: plotX(point.x, chart), y: plotY(point.y, chart) }));
+    const placed: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+    return chart.frontierPoints.map((point) => {
+      const x = plotX(point.x, chart);
+      const y = plotY(point.y, chart);
+      const width = point.name.length * charWidth;
+      const candidates = [
+        { dx: 0, dy: -14 },
+        { dx: 0, dy: 24 },
+        { dx: -width / 2 - 12, dy: 5 },
+        { dx: width / 2 + 12, dy: 5 },
+        { dx: 0, dy: -30 },
+        { dx: 0, dy: 40 },
+        { dx: -width / 2 - 12, dy: -14 },
+        { dx: width / 2 + 12, dy: 24 },
+        { dx: 0, dy: -46 },
+        { dx: 0, dy: 56 },
+      ];
+      const fit = (candidate: { dx: number; dy: number }) => {
+        const minCenter = plotBox.left + width / 2 + 2;
+        const maxCenter = plotBox.width - plotBox.right - width / 2;
+        const center = Math.max(minCenter, Math.min(maxCenter, x + candidate.dx));
+        const baseline = y + candidate.dy;
+        return {
+          center,
+          baseline,
+          box: {
+            left: center - width / 2,
+            right: center + width / 2,
+            top: baseline - height + 3,
+            bottom: baseline + 3,
+          },
+        };
+      };
+      const isFree = (option: ReturnType<typeof fit>) =>
+        option.box.top >= plotBox.top - 12 &&
+        option.box.bottom <= plotBox.height - plotBox.bottom &&
+        !placed.some(
+          (other) =>
+            option.box.left < other.right &&
+            option.box.right > other.left &&
+            option.box.top < other.bottom &&
+            option.box.bottom > other.top,
+        ) &&
+        !markers.some(
+          (marker) =>
+            marker.x > option.box.left - 8 &&
+            marker.x < option.box.right + 8 &&
+            marker.y > option.box.top - 8 &&
+            marker.y < option.box.bottom + 8,
+        );
+      const options = candidates.map(fit);
+      const chosen = options.find(isFree) ?? options[0];
+      placed.push(chosen.box);
+      return { id: point.model_id, name: point.name, x: chosen.center, y: chosen.baseline };
+    });
+  }
+
   function scatterMetricValue(row: LeaderboardRow, metric: ScatterMetric) {
     return isMcuMetric(metric) ? mcuRelativeCost(row.id, metric) : deviceMean(row.id, metric);
   }
@@ -2042,6 +2117,9 @@
                   </svg>
                   <span class="model-title-button">{row.name}</span>
                 </span>
+                <span class="phone-tags" aria-hidden="true">
+                  {getFamilyParts(row.family).map((part) => familyShortLabels[part] ?? formatFamily(part)).join(" · ")}
+                </span>
                 <span class="institution-list">
                   {#each modelInstitutionSummary(row.id) as institution, index}
                     <span>{institution}{index < modelInstitutionSummary(row.id).length - 1 ? " · " : ""}</span>
@@ -2078,24 +2156,23 @@
                 {/if}
               </td>
               <td class="family">
-                <div class="family-pill-list" aria-label={`Building blocks: ${familyText(row.family)}`}>
+                <div class="family-pill-list family-tag-list" aria-label={`Building blocks: ${familyText(row.family)}`}>
                   {#each getFamilyParts(row.family) as familyPart}
-                    <span class="family-pill">
-                      {formatFamily(familyPart)}
-                      <span
-                        class="family-pill-info"
-                        tabindex="0"
-                        aria-label={`Definition: ${describeFamily(familyPart)}`}
-                        onmouseenter={(event) => showComponentTooltip(event, describeFamily(familyPart))}
-                        onmousemove={moveComponentTooltip}
-                        onmouseleave={hideComponentTooltip}
-                        onfocus={(event) => showComponentTooltip(event, describeFamily(familyPart))}
-                        onblur={hideComponentTooltip}
-                        onclick={(event) => handleComponentTooltipClick(event, describeFamily(familyPart))}
-                        onkeydown={(event) => handleComponentTooltipKeydown(event, describeFamily(familyPart))}
-                      >
-                        ⓘ
-                      </span>
+                    {@const tip = `${formatFamily(familyPart)}: ${describeFamily(familyPart)}`}
+                    <span
+                      class="family-pill family-tag"
+                      role="note"
+                      tabindex="0"
+                      aria-label={tip}
+                      onmouseenter={(event) => showComponentTooltip(event, tip)}
+                      onmousemove={moveComponentTooltip}
+                      onmouseleave={hideComponentTooltip}
+                      onfocus={(event) => showComponentTooltip(event, tip)}
+                      onblur={hideComponentTooltip}
+                      onclick={(event) => handleComponentTooltipClick(event, tip)}
+                      onkeydown={(event) => handleComponentTooltipKeydown(event, tip)}
+                    >
+                      {familyShortLabels[familyPart] ?? formatFamily(familyPart)}
                     </span>
                   {/each}
                 </div>
@@ -2706,7 +2783,27 @@
                   </g>
                 {/each}
               </g>
+              {#if showParetoFrontier}
+                <g class="scatter-labels" aria-hidden="true">
+                  {#each scatterLabels as label}
+                    <text x={label.x} y={label.y} text-anchor="middle">{label.name}</text>
+                  {/each}
+                </g>
+              {/if}
             </svg>
+            <ul class="scatter-legend" aria-label="Models in the plot">
+              {#each scatterLegend as point}
+                {@const marker = modelMarker(point.model_id)}
+                <li class:on-front={point.isPareto}>
+                  <button type="button" onclick={() => openModelDetail(point.model_id)}>
+                    <svg class="entity-marker" viewBox="-10 -10 20 20" aria-hidden="true">
+                      <path d={getMarkerPath(marker.shape)} fill={marker.color} fill-rule="evenodd"></path>
+                    </svg>
+                    {point.name}
+                  </button>
+                </li>
+              {/each}
+            </ul>
             {#if isMcuMetric(activeScatterMetric)}
               <p class="view-note">
                 Models fit different datasets, so absolute MCU costs are not comparable. Each cost is
@@ -2901,6 +2998,21 @@
             onclick={closeModelDetail}
           ></button>
         </div>
+
+        {#if selectedDetailRow}
+          <div class="detail-metrics phone-results" aria-label="Results">
+            <div>
+              <span>Net Improvement</span>
+              <strong>{formatNetImprovement(selectedDetailRow.netImprovement)}</strong>
+            </div>
+            {#each activeCosts as cost}
+              <div>
+                <span>Share of Fronts: {cost.label}</span>
+                <strong>{formatPercent(paretoShare(selectedDetailRow.id, cost.metric))}</strong>
+              </div>
+            {/each}
+          </div>
+        {/if}
 
         <div class="detail-metrics" aria-label="Parameter and operation counts">
           <div>
@@ -4950,6 +5062,129 @@
 
   .filter-inactive select {
     cursor: not-allowed;
+  }
+
+  .family-tag-list {
+    gap: 4px;
+  }
+
+  .family-tag {
+    padding: 2px 7px;
+    cursor: help;
+  }
+
+  .phone-tags,
+  .phone-results {
+    display: none;
+  }
+
+  .scatter-labels text {
+    fill: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+    paint-order: stroke;
+    stroke: var(--panel);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+    pointer-events: none;
+  }
+
+  .scatter-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 12px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .scatter-legend button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 0;
+    background: transparent;
+    color: var(--muted-strong);
+    padding: 2px 0;
+    font: inherit;
+    font-size: 0.76rem;
+    cursor: pointer;
+  }
+
+  .scatter-legend button:hover,
+  .scatter-legend button:focus-visible {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+
+  .scatter-legend .on-front button {
+    color: var(--ink);
+    font-weight: 700;
+  }
+
+  .scatter-legend .entity-marker {
+    flex: none;
+    margin: 0;
+  }
+
+  @media (max-width: 760px) {
+    .leaderboard-table th:nth-child(2),
+    .leaderboard-table td:nth-child(2),
+    .leaderboard-table th:nth-child(3),
+    .leaderboard-table td:nth-child(3),
+    .leaderboard-table th:nth-child(n + 6),
+    .leaderboard-table td:nth-child(n + 6) {
+      display: none;
+    }
+
+    .leaderboard-table th:first-child,
+    .leaderboard-table td:first-child {
+      white-space: normal;
+    }
+
+    .leaderboard-table .institution-list {
+      display: none;
+    }
+
+    .leaderboard-table .model-name-line,
+    .leaderboard-table .model-title-button {
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: normal;
+    }
+
+    .leaderboard-table th,
+    .leaderboard-table td {
+      min-width: 0;
+      padding-right: 5px;
+      padding-left: 5px;
+      overflow-wrap: normal;
+    }
+
+    .leaderboard-table th:first-child,
+    .leaderboard-table td:first-child {
+      width: 50%;
+    }
+
+    .leaderboard-table th:nth-child(n + 4),
+    .leaderboard-table td:nth-child(n + 4) {
+      width: 25%;
+    }
+
+    .phone-tags {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 0.7rem;
+    }
+
+    .phone-results {
+      display: grid;
+    }
+
+    .scatter-labels text {
+      font-size: 20px;
+    }
   }
 
   .matrix-note {

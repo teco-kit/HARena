@@ -3,16 +3,11 @@ import BenchmarkPage from "../components/BenchmarkPage.astro";
 import catalog from "../generated/catalog.json";
 import BaseLayout from "../layouts/BaseLayout.astro";
 
-const modelRepository = "https://github.com/teco-kit/whar-models";
-const datasetRepository = "https://github.com/teco-kit/whar-datasets";
-const basePath = import.meta.env.BASE_URL.endsWith("/")
-  ? import.meta.env.BASE_URL
-  : `${import.meta.env.BASE_URL}/`;
 
 const existingEntries = {
   model: catalog.models.map(({ id, name }) => ({ id, name })),
   dataset: catalog.datasets.map(({ id, name }) => ({ id, name })),
-  pages: { model: `${basePath}models`, dataset: `${basePath}datasets` },
+  pages: { model: "../models/", dataset: "../datasets/" },
 };
 ---
 
@@ -20,7 +15,7 @@ const existingEntries = {
   <BenchmarkPage
     title="Contribute"
     headingId="contribute-heading"
-    description="Propose a new model or dataset. Proposals start as a GitHub issue and can be implemented by you or someone else."
+    description="Propose a new model or dataset. Repository and submission links are withheld during double-blind review."
   >
     <script is:inline type="application/json" id="existing-entries" set:html={JSON.stringify(existingEntries)} />
 
@@ -321,18 +316,18 @@ const existingEntries = {
           <aside class="preview" aria-labelledby="preview-heading">
             <div class="preview-head">
               <h3 id="preview-heading">Issue preview</h3>
-              <span class="repo-badge" data-preview-repo>teco-kit/whar-models</span>
+              <span class="repo-badge" data-preview-repo>[Model repository]</span>
             </div>
             <p class="preview-title" data-preview-title></p>
             <pre class="preview-body"><code data-preview-body></code></pre>
             <div class="preview-actions">
               <button type="button" class="primary-action" data-open-issue>
-                Open issue on GitHub
+                Preview submission
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" /></svg>
               </button>
               <button type="button" class="secondary-action" data-copy-markdown>Copy text</button>
             </div>
-            <p class="preview-note" data-form-status aria-live="polite">Opens a pre-filled issue on GitHub.</p>
+            <p class="preview-note" data-form-status aria-live="polite">Copy your proposal text. The issue link is withheld during review.</p>
             <button type="button" class="reset-link" data-reset-form>Clear form</button>
           </aside>
         </div>
@@ -342,8 +337,8 @@ const existingEntries = {
     <section class="panel next-panel" data-next-panel hidden aria-labelledby="next-heading" tabindex="-1">
       <div class="section-heading">
         <p class="step-label">Step 2 · Discuss</p>
-        <h2 id="next-heading">Create the issue on GitHub</h2>
-        <p>Check the new tab and click <strong>Create</strong>. Nothing opened? Copy the text into a <a data-manual-issue-link target="_blank" rel="noreferrer">new issue</a>.</p>
+        <h2 id="next-heading">Submit the issue</h2>
+        <p>The <span class="repository-placeholder" role="link" aria-disabled="true">[Issue submission link]</span> is withheld during double-blind review. You can copy the proposal text from the preview above.</p>
       </div>
       <ol class="next-steps" data-next-self>
         <li>Note the issue number, e.g. <code>#42</code>.</li>
@@ -375,7 +370,7 @@ const existingEntries = {
             <span class="step-number">1</span>
             <div>
               <h3>Add the implementation</h3>
-              <p>Fork <a href={modelRepository} target="_blank" rel="noreferrer">whar-models</a> and add <code>src/whar_models/&lt;model_id&gt;/</code> with a builder taking <code>input_channels</code>, <code>window_length</code> and <code>num_classes</code>.</p>
+              <p>Fork <span class="repository-placeholder" role="link" aria-disabled="true" title="Repository link withheld during review">[Model repository]</span> and add <code>src/whar_models/&lt;model_id&gt;/</code> with a builder taking <code>input_channels</code>, <code>window_length</code> and <code>num_classes</code>.</p>
             </div>
           </li>
           <li>
@@ -401,7 +396,7 @@ const existingEntries = {
             <div>
               <h3>Open the pull request</h3>
               <p>Link the proposal with <code>Closes #&lt;issue&gt;</code>.</p>
-              <a class="inline-link" href={`${modelRepository}/compare`} target="_blank" rel="noreferrer">Open a pull request →</a>
+              <span class="inline-link repository-placeholder" role="link" aria-disabled="true">[Pull request link]</span>
             </div>
           </li>
         </ol>
@@ -413,7 +408,7 @@ const existingEntries = {
             <span class="step-number">1</span>
             <div>
               <h3>Add a parser and config</h3>
-              <p>Fork <a href={datasetRepository} target="_blank" rel="noreferrer">whar-datasets</a> and add <code>config/cfg_&lt;dataset_id&gt;.py</code> with a parser and <code>WHARConfig</code>.</p>
+              <p>Fork <span class="repository-placeholder" role="link" aria-disabled="true" title="Repository link withheld during review">[Dataset repository]</span> and add <code>config/cfg_&lt;dataset_id&gt;.py</code> with a parser and <code>WHARConfig</code>.</p>
             </div>
           </li>
           <li>
@@ -439,7 +434,7 @@ const existingEntries = {
             <div>
               <h3>Open the pull request</h3>
               <p>Link the proposal with <code>Closes #&lt;issue&gt;</code>.</p>
-              <a class="inline-link" href={`${datasetRepository}/compare`} target="_blank" rel="noreferrer">Open a pull request →</a>
+              <span class="inline-link repository-placeholder" role="link" aria-disabled="true">[Pull request link]</span>
             </div>
           </li>
         </ol>
@@ -459,16 +454,20 @@ const existingEntries = {
   type Entry = { id: string; name: string };
   type ExistingEntries = Record<ContributionKind, Entry[]> & { pages: Record<ContributionKind, string> };
 
-  const repositories: Record<ContributionKind, string> = {
-    model: "https://github.com/teco-kit/whar-models",
-    dataset: "https://github.com/teco-kit/whar-datasets",
+  const repositoryLabels: Record<ContributionKind, string> = {
+    model: "[Model repository]",
+    dataset: "[Dataset repository]",
   };
   const draftKey = "harena-contribute-draft";
-  const maxUrlLength = 7500;
 
   const existing = JSON.parse(
     document.getElementById("existing-entries")?.textContent ?? "{}",
   ) as ExistingEntries;
+
+  // Resolve catalog links relative to this page so the form also works below
+  // an anonymous hosting prefix and on the local development server.
+  const pageDirectory = new URL(window.location.href);
+  pageDirectory.pathname = pageDirectory.pathname.replace(/\/index\.html$/, "/").replace(/\/?$/, "/");
 
   let activeKind: ContributionKind = "model";
   let currentTitle = "";
@@ -485,7 +484,6 @@ const existingEntries = {
   const nextPanel = document.querySelector<HTMLElement>("[data-next-panel]");
   const nextSelf = document.querySelector<HTMLElement>("[data-next-self]");
   const nextRequest = document.querySelector<HTMLElement>("[data-next-request]");
-  const manualIssueLink = document.querySelector<HTMLAnchorElement>("[data-manual-issue-link]");
   const architectureOptions = document.querySelector<HTMLElement>("[data-architecture-options]");
   const customArchitectureInput = document.querySelector<HTMLInputElement>("[data-custom-architecture]");
   const copyButton = document.querySelector<HTMLButtonElement>("[data-copy-markdown]");
@@ -581,7 +579,7 @@ const existingEntries = {
         Object.assign(document.createElement("strong"), { textContent: match.name }),
         ` (${match.id}). `,
         Object.assign(document.createElement("a"), {
-          href: existing.pages[kind],
+          href: new URL(existing.pages[kind], pageDirectory).href,
           textContent: `Check the ${kind} list`,
         }),
         " before proposing it again. Variants are welcome; explain the difference in the notes.",
@@ -596,7 +594,7 @@ const existingEntries = {
     currentMarkdown = issue.body;
     if (previewTitle) previewTitle.textContent = issue.title;
     if (previewBody) previewBody.textContent = issue.body;
-    if (previewRepo) previewRepo.textContent = repositories[activeKind].replace("https://github.com/", "");
+    if (previewRepo) previewRepo.textContent = repositoryLabels[activeKind];
     updateDuplicateWarning(form, activeKind);
   };
 
@@ -699,12 +697,21 @@ const existingEntries = {
     return form.reportValidity();
   };
 
-  const copyText = async (text: string) => {
+  const copyText = async (text: string): Promise<"copied" | "selected" | "failed"> => {
     try {
       await navigator.clipboard.writeText(text);
-      return true;
+      return "copied";
     } catch {
-      return false;
+      // Anonymous hosting can restrict clipboard access. Keep the draft easy
+      // to copy manually without sending it anywhere.
+      const selection = window.getSelection();
+      if (!selection || !previewTitle || !previewBody) return "failed";
+      const range = document.createRange();
+      range.setStartBefore(previewTitle);
+      range.setEndAfter(previewBody);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return "selected";
     }
   };
 
@@ -752,23 +759,11 @@ const existingEntries = {
     }
   });
 
-  document.querySelector("[data-open-issue]")?.addEventListener("click", async () => {
+  document.querySelector("[data-open-issue]")?.addEventListener("click", () => {
     const form = formFor(activeKind);
     if (!validate(form)) return;
     updatePreview();
 
-    const base = `${repositories[activeKind]}/issues/new`;
-    let url = `${base}?title=${encodeURIComponent(currentTitle)}&body=${encodeURIComponent(currentMarkdown)}`;
-    if (url.length > maxUrlLength) {
-      const copied = await copyText(currentMarkdown);
-      const fallback = copied
-        ? "The proposal was copied to your clipboard because it is too long for a link. Paste it here."
-        : "The proposal is too long for a link. Copy it from the HARENA contribute page and paste it here.";
-      url = `${base}?title=${encodeURIComponent(currentTitle)}&body=${encodeURIComponent(fallback)}`;
-    }
-    window.open(url, "_blank", "noopener");
-
-    if (manualIssueLink) manualIssueLink.href = base;
     const intent = currentIntent();
     if (nextSelf) nextSelf.hidden = intent !== "self";
     if (nextRequest) nextRequest.hidden = intent !== "request";
@@ -782,7 +777,7 @@ const existingEntries = {
   copyButton?.addEventListener("click", async () => {
     updatePreview();
     const copied = await copyText(`${currentTitle}\n\n${currentMarkdown}`);
-    copyButton.textContent = copied ? "Copied" : "Copy failed";
+    copyButton.textContent = copied === "copied" ? "Copied" : copied === "selected" ? "Text selected" : "Copy failed";
     window.setTimeout(() => (copyButton.textContent = "Copy text"), 1600);
   });
 
@@ -807,6 +802,12 @@ const existingEntries = {
 </script>
 
 <style>
+  .repository-placeholder {
+    color: var(--muted);
+    border-bottom: 1px dashed currentColor;
+    cursor: default;
+  }
+
   .panel {
     margin-top: 14px; overflow: hidden; border: 1px solid var(--line-strong);
     border-radius: 8px; background: var(--panel);

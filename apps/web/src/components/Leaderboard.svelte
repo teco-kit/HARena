@@ -2124,7 +2124,7 @@
                   {#each modelInstitutionSummary(row.id) as institution, index}
                     <span>{institution}{index < modelInstitutionSummary(row.id).length - 1 ? " · " : ""}</span>
                   {:else}
-                    <span>Institution metadata pending</span>
+                    <span>Affiliations withheld during review</span>
                   {/each}
                 </span>
               </td>
@@ -2987,7 +2987,7 @@
                   </li>
                 {/each}
               {:else}
-                <li><span>Author information pending</span></li>
+                <li><span>Author details withheld during review</span></li>
               {/if}
             </ul>
           </div>
@@ -3093,7 +3093,7 @@
                   </li>
                 {/each}
               {:else}
-                <li><span>Author information pending</span></li>
+                <li><span>Author details withheld during review</span></li>
               {/if}
             </ul>
           </div>
@@ -5070,6 +5070,8 @@
 
   .family-tag {
     padding: 2px 7px;
+    overflow-wrap: normal;
+    white-space: nowrap;
     cursor: help;
   }
 

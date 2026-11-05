@@ -1,7 +1,7 @@
 {
  "source": {
   "kind": "harena_analysis_snapshot",
-  "paper": "HARena",
+  "paper": "HARENA",
   "snapshot_date": "2026-11-02",
   "training_runs": 10564,
   "notes": "Exported by scripts/export_harena_results.py from harena-analysis."
@@ -217,7 +217,7 @@
     "id": "random_forest",
     "name": "Random Forest",
     "package": "whar-models",
-    "paper": "WHAR Arena: Benchmarking the State of the Art in Efficient Wearable Human Activity Recognition"
+    "paper": "HARENA: A Living Benchmark for Sensor-Based Human Activity Recognition on Resource-Constrained Edge Devices"
    },
    {
     "family": "attn_cnn_dense_rnn",
@@ -281,7 +281,7 @@
     "id": "svm",
     "name": "SVM",
     "package": "whar-models",
-    "paper": "WHAR Arena: Benchmarking the State of the Art in Efficient Wearable Human Activity Recognition"
+    "paper": "HARENA: A Living Benchmark for Sensor-Based Human Activity Recognition on Resource-Constrained Edge Devices"
    },
    {
     "family": "fe",
@@ -289,7 +289,7 @@
     "id": "knn",
     "name": "k-NN",
     "package": "whar-models",
-    "paper": "WHAR Arena: Benchmarking the State of the Art in Efficient Wearable Human Activity Recognition"
+    "paper": "HARENA: A Living Benchmark for Sensor-Based Human Activity Recognition on Resource-Constrained Edge Devices"
    },
    {
     "family": "attn_cnn",

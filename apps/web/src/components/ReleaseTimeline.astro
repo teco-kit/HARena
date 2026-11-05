@@ -154,7 +154,7 @@ const noun = datedItems.length === 1 ? itemLabel : `${itemLabel}s`;
     min-width: 0;
     margin-bottom: 14px;
     overflow: hidden;
-    border: 1px solid lightgray;
+    border: 1px solid var(--line-strong);
     border-radius: 8px;
     background: var(--panel);
   }
@@ -289,7 +289,7 @@ const noun = datedItems.length === 1 ? itemLabel : `${itemLabel}s`;
   }
 
   .timeline-tooltip span {
-    color: hsl(33 31% 94% / 0.78);
+    color: hsl(var(--panel-strong-hsl) / 0.78);
     font-weight: 500;
   }
 

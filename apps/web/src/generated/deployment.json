@@ -4,9 +4,9 @@
   "snapshot_date": "2026-11-02",
   "reference_model": "liteway_light",
   "devices": {
-   "phone": "Galaxy S24 Ultra",
-   "watch": "Galaxy Watch5 Pro",
-   "mcu": "nRF5340"
+   "phone": "Samsung Galaxy S24 Ultra",
+   "watch": "Samsung Galaxy Watch5 Pro",
+   "mcu": "Nordic nRF5340 DK"
   }
  },
  "rows": [

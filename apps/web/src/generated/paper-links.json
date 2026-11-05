@@ -119,6 +119,10 @@
     "wisdm_19_watch": {
       "title": "WISDM: Smartphone and Smartwatch Activity and Biometrics Dataset",
       "url": "https://archive.ics.uci.edu/ml/machine-learning-databases/00507/WISDM-dataset-description.pdf"
+    },
+    "aicos_har": {
+      "title": "A human activity recognition dataset spanning multiple devices and body positions with cross-dataset evaluation",
+      "url": "https://www.nature.com/articles/s41597-026-08470-y"
     }
   },
   "models": {
@@ -177,6 +181,14 @@
     "triple_cross_domain_attention": {
       "title": "Triple Cross-Domain Attention on Human Activity Recognition Using Wearable Sensors",
       "url": "https://yinntag.github.io/publications/P3.pdf"
+    },
+    "liteway": {
+      "title": "LITEWAY: LIghtweight HAR via Temporal Efficient highWAY",
+      "url": "https://arxiv.org/pdf/2608.09421"
+    },
+    "liteway_light": {
+      "title": "LITEWAY: LIghtweight HAR via Temporal Efficient highWAY",
+      "url": "https://arxiv.org/pdf/2608.09421"
     }
   }
 }

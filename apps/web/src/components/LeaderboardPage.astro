@@ -15,18 +15,20 @@ const leaderboardDateTime = paperBenchmark.source.snapshot_date;
 const trainingRuns = paperBenchmark.source.training_runs;
 const modelCount = benchmark.catalog.models.length;
 const datasetCount = benchmark.catalog.datasets.length;
+const deviceCount = Object.keys(deployment.source.devices).length;
 
 ---
 
 <BenchmarkPage
   title="Leaderboard"
   headingId="leaderboard-heading"
-  description="HARena benchmarks wearable human activity recognition models across standardized datasets, ranking predictive performance together with deployment-oriented efficiency."
+  description="HARENA is a living benchmark for sensor-based human activity recognition, comparing architectures on recognition performance on unseen subjects and measured deployment cost."
   metaItems={[
     { icon: "calendar", label: "Snapshot", value: leaderboardDate, datetime: leaderboardDateTime },
     { icon: "runs", label: "Training Runs", value: trainingRuns },
     { icon: "models", label: "Models", value: modelCount },
     { icon: "datasets", label: "Datasets", value: datasetCount },
+    { icon: "devices", label: "Devices", value: deviceCount },
   ]}
 >
   <Leaderboard

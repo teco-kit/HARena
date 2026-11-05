@@ -17,7 +17,7 @@ type Model = {
 
 type ModelDetail = {
   params: string | null;
-  flops: string | null;
+  macs: string | null;
   institutions?: string[];
   authors?: Array<{
     name: string;
@@ -38,8 +38,7 @@ type ArchitecturePart = {
 
 const modelDetails = modelDetailsData as {
   source: {
-    table: string;
-    input_assumption: string;
+    window_size_seconds: number;
     note: string;
   };
   models: Record<string, ModelDetail>;
@@ -120,11 +119,11 @@ function describeFamily(family: string): string {
     spec: "Transforms signals into frequency-domain representations or otherwise processes spectral features before classification.",
   };
 
-  return definitions[family] ?? "Architecture component used by this model.";
+  return definitions[family] ?? "Architecture building block used by this model.";
 }
 
 const models = benchmark.catalog.models.map((model) => {
-  const detail = modelDetails.models[model.id] ?? { params: null, flops: null };
+  const detail = modelDetails.models[model.id] ?? { params: null, macs: null };
   const architectureIds = getFamilyParts(model.family);
   const architectureParts: ArchitecturePart[] = architectureIds.map((id) => ({
     id,
@@ -141,7 +140,7 @@ const models = benchmark.catalog.models.map((model) => {
     detail,
     year: modelYearById[model.id] ?? null,
     paramsValue: parseMetricValue(detail.params),
-    flopsValue: parseMetricValue(detail.flops),
+    macsValue: parseMetricValue(detail.macs),
     institutionSummary: formatInstitutionSummary(
       detail.institutions ?? [],
       classicalBaselineDetails[model.id],
@@ -162,7 +161,7 @@ const frameworkOptions = [...new Set(models.map((model) => model.framework))]
   .sort((a, b) => compareLabels(formatFramework(a), formatFramework(b)))
   .map((id) => ({ id, name: formatFramework(id) }));
 const paramsMax = roundMetricMax(models.map((model) => model.paramsValue));
-const flopsMax = roundMetricMax(models.map((model) => model.flopsValue));
+const macsMax = roundMetricMax(models.map((model) => model.macsValue));
 const snapshotDate = "November 2, 2026";
 const snapshotDateTime = "2026-11-02";
 
@@ -225,11 +224,11 @@ function formatScaledMetric(value: number) {
 }
 ---
 
-<BaseLayout title="HARena | Models">
+<BaseLayout title="HARENA | Models">
   <BenchmarkPage
     title="Models"
     headingId="models-heading"
-    description="Model catalog for the static HARena paper snapshot."
+    description="Model catalog for the current HARENA suite. Params and MACs are means across the datasets for 3 s windows."
     metaItems={[
       { icon: "calendar", label: "Snapshot", value: snapshotDate, datetime: snapshotDateTime },
       { icon: "models", label: "Models", value: models.length },
@@ -254,16 +253,16 @@ function formatScaledMetric(value: number) {
 
       <div class="filter-content">
         <div class="model-filter">
-          <span class="filter-label">Components</span>
+          <span class="filter-label">Building Blocks</span>
           <details>
-            <summary aria-label="Components">
-              <span data-filter-summary="architecture">All components</span>
+            <summary aria-label="Building blocks">
+              <span data-filter-summary="architecture">All building blocks</span>
               <span class="filter-count" data-filter-count="architecture">
                 {architectureOptions.length}/{architectureOptions.length}
               </span>
             </summary>
             <div class="filter-menu">
-              <div class="filter-actions component-actions" aria-label="Component selection actions">
+              <div class="filter-actions component-actions" aria-label="Building block selection actions">
                 <button type="button" data-filter-action="all-architecture">All</button>
                 <button type="button" data-filter-action="none-architecture">None</button>
                 <label class="component-match-toggle">
@@ -396,44 +395,44 @@ function formatScaledMetric(value: number) {
         </div>
 
         <div class="model-filter range-model-filter">
-          <span class="filter-label">FLOPs</span>
+          <span class="filter-label">MACs</span>
           <details>
-            <summary aria-label="FLOPs">
-              <span data-range-summary="flops">0 - {formatCompactMetric(flopsMax)}</span>
-              <span class="filter-count" data-range-count="flops">range</span>
+            <summary aria-label="MACs">
+              <span data-range-summary="macs">0 - {formatCompactMetric(macsMax)}</span>
+              <span class="filter-count" data-range-count="macs">range</span>
             </summary>
             <div class="filter-menu range-menu">
               <div class="range-values" aria-live="polite">
-                <span>Min <strong data-range-value="flops-min">0</strong></span>
-                <span>Max <strong data-range-value="flops-max">{formatCompactMetric(flopsMax)}</strong></span>
+                <span>Min <strong data-range-value="macs-min">0</strong></span>
+                <span>Max <strong data-range-value="macs-max">{formatCompactMetric(macsMax)}</strong></span>
               </div>
-              <div class="dual-range" data-range-track="flops">
+              <div class="dual-range" data-range-track="macs">
                 <input
-                  id="model-flops-min"
+                  id="model-macs-min"
                   type="range"
                   min="0"
-                  max={flopsMax}
+                  max={macsMax}
                   step="100000"
                   value="0"
-                  aria-label="Minimum FLOPs"
-                  data-range-kind="flops"
+                  aria-label="Minimum MACs"
+                  data-range-kind="macs"
                   data-range-bound="min"
                   data-range-default="0"
                 />
                 <input
-                  id="model-flops-max"
+                  id="model-macs-max"
                   type="range"
                   min="0"
-                  max={flopsMax}
+                  max={macsMax}
                   step="100000"
-                  value={flopsMax}
-                  aria-label="Maximum FLOPs"
-                  data-range-kind="flops"
+                  value={macsMax}
+                  aria-label="Maximum MACs"
+                  data-range-kind="macs"
                   data-range-bound="max"
-                  data-range-default={flopsMax}
+                  data-range-default={macsMax}
                 />
               </div>
-              <button type="button" class="range-reset" data-range-reset="flops">Reset</button>
+              <button type="button" class="range-reset" data-range-reset="macs">Reset</button>
             </div>
           </details>
         </div>
@@ -465,7 +464,7 @@ function formatScaledMetric(value: number) {
                   </span>
                 </button>
               </th>
-              <th>Components</th>
+              <th>Building Blocks</th>
               <th aria-sort="none">
                 <button
                   class="sort-button"
@@ -500,11 +499,11 @@ function formatScaledMetric(value: number) {
                 <button
                   class="sort-button"
                   type="button"
-                  data-sort-key="flops"
+                  data-sort-key="macs"
                   data-sort-type="number"
                   data-sort-default="asc"
                 >
-                  FLOPs
+                  MACs
                   <span class="sort-arrows" aria-hidden="true">
                     <span class="sort-arrow-up"></span>
                     <span class="sort-arrow-down"></span>
@@ -523,17 +522,17 @@ function formatScaledMetric(value: number) {
                 data-model-paper-url={model.paperLink?.url ?? ""}
                 data-model-year={model.year ?? ""}
                 data-model-params={model.detail.params ?? ""}
-                data-model-flops={model.detail.flops ?? ""}
+                data-model-macs={model.detail.macs ?? ""}
                 data-model-authors={JSON.stringify(model.detail.authors ?? [])}
                 data-architecture-parts={model.architectureIds.join(" ")}
                 data-framework={model.framework}
                 data-params-value={model.paramsValue ?? ""}
-                data-flops-value={model.flopsValue ?? ""}
+                data-macs-value={model.macsValue ?? ""}
                 data-sort-index={index}
                 data-sort-year={model.year ?? ""}
                 data-sort-framework={formatFramework(model.framework)}
                 data-sort-params={model.paramsValue ?? ""}
-                data-sort-flops={model.flopsValue ?? ""}
+                data-sort-macs={model.macsValue ?? ""}
                 tabindex="0"
                 aria-label={`Open model details: ${model.name}`}
               >
@@ -548,7 +547,7 @@ function formatScaledMetric(value: number) {
                   <strong class="metric">{model.year ?? "-"}</strong>
                 </td>
                 <td>
-                  <div class="pill-list" aria-label={`Components: ${model.architecture.join(" ")}`}>
+                  <div class="pill-list" aria-label={`Building blocks: ${model.architecture.join(" ")}`}>
                     {model.architectureParts.map((part) => (
                       <span class="pill">
                         {part.name}
@@ -572,7 +571,7 @@ function formatScaledMetric(value: number) {
                   <strong class="metric">{model.detail.params ?? "-"}</strong>
                 </td>
                 <td>
-                  <strong class="metric">{model.detail.flops ?? "-"}</strong>
+                  <strong class="metric">{model.detail.macs ?? "-"}</strong>
                 </td>
               </tr>
             ))}
@@ -634,7 +633,7 @@ function formatScaledMetric(value: number) {
           ></button>
         </div>
 
-        <div class="detail-metrics" aria-label="Model size and compute">
+        <div class="detail-metrics" aria-label="Parameter and operation counts">
           <div>
             <span>Year</span>
             <strong data-model-modal-field="year"></strong>
@@ -644,14 +643,15 @@ function formatScaledMetric(value: number) {
             <strong data-model-modal-field="params"></strong>
           </div>
           <div>
-            <span>FLOPs*</span>
-            <strong data-model-modal-field="flops"></strong>
+            <span>MACs*</span>
+            <strong data-model-modal-field="macs"></strong>
           </div>
         </div>
 
         <p class="model-size-note">
-          * <strong>Model size setup.</strong> These counts are reported for 6
-          sensors, 5 classes, and 128 timesteps.
+          * <strong>Supplementary counts.</strong> Parameter and MAC counts are
+          supplementary measures, given as means across the datasets for 3 s
+          windows. Classical baselines have neither (-).
         </p>
       </section>
     </div>
@@ -677,7 +677,7 @@ function formatScaledMetric(value: number) {
   const modelModalFields = {
     year: modelModal?.querySelector('[data-model-modal-field="year"]'),
     params: modelModal?.querySelector('[data-model-modal-field="params"]'),
-    flops: modelModal?.querySelector('[data-model-modal-field="flops"]'),
+    macs: modelModal?.querySelector('[data-model-modal-field="macs"]'),
   };
   const visibleModelCount = document.querySelector("[data-visible-model-count]");
   const componentMatchInput = document.querySelector("[data-component-match-exact]");
@@ -713,9 +713,9 @@ function formatScaledMetric(value: number) {
   };
   const groups = {
     architecture: {
-      allLabel: "All components",
-      noneLabel: "No components",
-      plural: "components",
+      allLabel: "All building blocks",
+      noneLabel: "No building blocks",
+      plural: "building blocks",
       inputs: Array.from(document.querySelectorAll('[data-filter-kind="architecture"]')),
       summary: document.querySelector('[data-filter-summary="architecture"]'),
       count: document.querySelector('[data-filter-count="architecture"]'),
@@ -739,14 +739,14 @@ function formatScaledMetric(value: number) {
       maxValue: document.querySelector('[data-range-value="params-max"]'),
       track: document.querySelector('[data-range-track="params"]'),
     },
-    flops: {
-      min: document.querySelector('[data-range-kind="flops"][data-range-bound="min"]'),
-      max: document.querySelector('[data-range-kind="flops"][data-range-bound="max"]'),
-      summary: document.querySelector('[data-range-summary="flops"]'),
-      count: document.querySelector('[data-range-count="flops"]'),
-      minValue: document.querySelector('[data-range-value="flops-min"]'),
-      maxValue: document.querySelector('[data-range-value="flops-max"]'),
-      track: document.querySelector('[data-range-track="flops"]'),
+    macs: {
+      min: document.querySelector('[data-range-kind="macs"][data-range-bound="min"]'),
+      max: document.querySelector('[data-range-kind="macs"][data-range-bound="max"]'),
+      summary: document.querySelector('[data-range-summary="macs"]'),
+      count: document.querySelector('[data-range-count="macs"]'),
+      minValue: document.querySelector('[data-range-value="macs-min"]'),
+      maxValue: document.querySelector('[data-range-value="macs-max"]'),
+      track: document.querySelector('[data-range-track="macs"]'),
     },
   };
 
@@ -874,7 +874,7 @@ function formatScaledMetric(value: number) {
     setModelModalText(modelModalPaperPendingTitle, paperTitle);
     setModelModalText(modelModalFields.year, row.dataset.modelYear);
     setModelModalText(modelModalFields.params, row.dataset.modelParams);
-    setModelModalText(modelModalFields.flops, row.dataset.modelFlops);
+    setModelModalText(modelModalFields.macs, row.dataset.modelMacs);
     renderModelAuthors(modelAuthors(row));
 
     const paperUrl = row.dataset.modelPaperUrl || "";
@@ -1067,7 +1067,7 @@ function formatScaledMetric(value: number) {
     const selectedArchitecture = selectedValues("architecture");
     const selectedFramework = selectedValues("framework");
     const paramsRange = rangeState("params");
-    const flopsRange = rangeState("flops");
+    const macsRange = rangeState("macs");
     let visibleCount = 0;
 
     modelRows.forEach((row) => {
@@ -1084,9 +1084,9 @@ function formatScaledMetric(value: number) {
             : architectureParts.some((part) => selectedArchitecture.has(part))));
       const isFrameworkVisible = selectedFramework.has(row.dataset.framework ?? "");
       const isParamsVisible = isMetricInRange(row.dataset.paramsValue, paramsRange);
-      const isFlopsVisible = isMetricInRange(row.dataset.flopsValue, flopsRange);
+      const isMacsVisible = isMetricInRange(row.dataset.macsValue, macsRange);
       const isVisible =
-        isArchitectureVisible && isFrameworkVisible && isParamsVisible && isFlopsVisible;
+        isArchitectureVisible && isFrameworkVisible && isParamsVisible && isMacsVisible;
 
       row.hidden = !isVisible;
       const timelinePoint = modelTimelinePoints.find(
@@ -1105,7 +1105,7 @@ function formatScaledMetric(value: number) {
     updateSummary("architecture");
     updateSummary("framework");
     updateRangeSummary("params", paramsRange);
-    updateRangeSummary("flops", flopsRange);
+    updateRangeSummary("macs", macsRange);
   }
 
   document.querySelectorAll("[data-filter-action]").forEach((button) => {
@@ -1346,7 +1346,7 @@ function formatScaledMetric(value: number) {
   }
 
   .model-filter summary:focus-visible {
-    outline: 2px solid hsl(24 6% 17% / 0.28);
+    outline: 2px solid hsl(var(--ink-hsl) / 0.28);
     outline-offset: 2px;
   }
 
@@ -1372,7 +1372,7 @@ function formatScaledMetric(value: number) {
     max-width: none;
     max-height: min(560px, 72vh);
     overflow: auto;
-    border: 1px solid lightgray;
+    border: 1px solid var(--line-strong);
     border-radius: 8px;
     background: var(--panel);
     box-shadow: none;
@@ -1532,7 +1532,7 @@ function formatScaledMetric(value: number) {
   }
 
   .dual-range input[type="range"]:focus-visible {
-    outline: 2px solid hsl(24 6% 17% / 0.28);
+    outline: 2px solid hsl(var(--ink-hsl) / 0.28);
     outline-offset: 2px;
   }
 
@@ -1608,7 +1608,7 @@ function formatScaledMetric(value: number) {
   }
 
   .filter-option input:focus-visible + .filter-check {
-    outline: 2px solid hsl(24 6% 17% / 0.28);
+    outline: 2px solid hsl(var(--ink-hsl) / 0.28);
     outline-offset: 2px;
   }
 
@@ -1622,7 +1622,7 @@ function formatScaledMetric(value: number) {
 
   .arena-panel {
     min-width: 0;
-    border: 1px solid lightgray;
+    border: 1px solid var(--line-strong);
     border-radius: 8px;
     background: var(--panel);
     overflow: hidden;
@@ -1705,7 +1705,7 @@ function formatScaledMetric(value: number) {
   }
 
   .sort-button:focus-visible {
-    outline: 2px solid hsl(24 6% 17% / 0.28);
+    outline: 2px solid hsl(var(--ink-hsl) / 0.28);
     outline-offset: 3px;
   }
 
@@ -1740,7 +1740,7 @@ function formatScaledMetric(value: number) {
   }
 
   .catalog-table tbody tr:hover td {
-    background: hsl(33 31% 94% / 0.72);
+    background: hsl(var(--panel-strong-hsl) / 0.72);
   }
 
   .catalog-table tbody tr[data-model-row] {
@@ -1748,7 +1748,7 @@ function formatScaledMetric(value: number) {
   }
 
   .catalog-table tbody tr[data-model-row]:focus-visible {
-    outline: 2px solid hsl(24 6% 17% / 0.28);
+    outline: 2px solid hsl(var(--ink-hsl) / 0.28);
     outline-offset: -2px;
   }
 
@@ -1769,7 +1769,7 @@ function formatScaledMetric(value: number) {
     font-weight: 500;
     line-height: 1.2;
     text-decoration: underline;
-    text-decoration-color: hsl(24 6% 17% / 0.5);
+    text-decoration-color: hsl(var(--ink-hsl) / 0.5);
     text-decoration-style: dotted;
     text-decoration-thickness: 1px;
     text-underline-offset: 4px;
@@ -1801,7 +1801,7 @@ function formatScaledMetric(value: number) {
     justify-content: center;
     gap: 5px;
     min-height: 20px;
-    border: 1px solid lightgray;
+    border: 1px solid var(--line-strong);
     border-radius: 999px;
     background: var(--panel-soft);
     color: var(--ink);
@@ -1840,7 +1840,7 @@ function formatScaledMetric(value: number) {
     z-index: 120;
     max-width: min(280px, calc(100vw - 24px));
     padding: 8px 10px;
-    border: 1px solid lightgray;
+    border: 1px solid var(--line-strong);
     border-radius: 7px;
     background: var(--ink);
     color: var(--panel);
@@ -1872,7 +1872,7 @@ function formatScaledMetric(value: number) {
     font-size: 0.88rem;
     font-weight: 600;
     text-decoration: underline;
-    text-decoration-color: hsl(24 6% 17% / 0.3);
+    text-decoration-color: hsl(var(--ink-hsl) / 0.3);
     text-decoration-thickness: 1px;
     text-underline-offset: 3px;
   }
@@ -1903,7 +1903,7 @@ function formatScaledMetric(value: number) {
     position: absolute;
     inset: 0;
     border: 0;
-    background: hsl(24 6% 17% / 0.28);
+    background: hsl(var(--ink-hsl) / 0.28);
     cursor: pointer;
   }
 
@@ -1915,7 +1915,7 @@ function formatScaledMetric(value: number) {
     max-height: min(760px, calc(100vh - 32px));
     gap: 16px;
     overflow: auto;
-    border: 1px solid lightgray;
+    border: 1px solid var(--line-strong);
     border-radius: 8px;
     background: var(--panel);
     box-shadow: none;
@@ -1951,7 +1951,7 @@ function formatScaledMetric(value: number) {
     height: 32px;
     flex: 0 0 auto;
     place-items: center;
-    border: 1px solid lightgray;
+    border: 1px solid var(--line-strong);
     border-radius: 999px;
     background: var(--panel-soft);
     color: var(--ink);
@@ -1983,7 +1983,7 @@ function formatScaledMetric(value: number) {
   .modal-close:hover,
   .modal-close:focus-visible {
     background: var(--panel);
-    outline: 2px solid hsl(24 6% 17% / 0.2);
+    outline: 2px solid hsl(var(--ink-hsl) / 0.2);
     outline-offset: 2px;
   }
 
@@ -1994,7 +1994,7 @@ function formatScaledMetric(value: number) {
   }
 
   .detail-metrics div {
-    border: 1px solid lightgray;
+    border: 1px solid var(--line-strong);
     border-radius: 8px;
     background: var(--panel-soft);
     padding: 12px;
@@ -2026,7 +2026,7 @@ function formatScaledMetric(value: number) {
 
   .model-size-note {
     margin: 2px 0 0;
-    color: hsl(35 6% 38%);
+    color: var(--muted);
     font-size: 0.8rem;
     line-height: 1.35;
   }
@@ -2056,7 +2056,7 @@ function formatScaledMetric(value: number) {
     font-weight: 600;
     line-height: 1.3;
     text-decoration: underline;
-    text-decoration-color: hsl(24 6% 17% / 0.3);
+    text-decoration-color: hsl(var(--ink-hsl) / 0.3);
     text-decoration-thickness: 1px;
     text-underline-offset: 3px;
   }

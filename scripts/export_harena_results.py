@@ -1,4 +1,4 @@
-"""Export the HARena paper results from harena-analysis into the website's JSON files.
+"""Export the HARENA paper results from harena-analysis into the website's JSON files.
 
 The analysis repository holds the raw server, device and MCU runs, and its loaders
 define the numbers in the paper. This script reuses those loaders, so the website
@@ -10,6 +10,7 @@ and the paper cannot disagree. Run it after the analysis data changes:
 Writes to apps/web/src/generated/:
     paper-benchmark.json   catalog plus test/validation macro-F1 per model, dataset, window
     deployment.json        phone, watch and MCU measurements per model, dataset, window
+    model-details.json     params and MACs per model (means over datasets, COUNT_WINDOW_S)
 """
 
 from __future__ import annotations
@@ -23,13 +24,15 @@ from typing import Any
 import pandas as pd
 from harena.data import BENCHMARK_DATASETS, PAPER_WINDOWS, load_runs, load_splits
 from harena.efficiency import model_dataset_table
+from harena.mcu import load_mcu_runs
 from harena.names import dataset_label, model_label
 from harena.paths import PROJECT_ROOT
 
 GENERATED = Path(__file__).resolve().parents[1] / "apps" / "web" / "src" / "generated"
 SEED = 0
+COUNT_WINDOW_S = 3  # window length of the params and MACs shown in the model catalog
 REFERENCE_MODEL = "liteway_light"
-PAPER_TITLE = "HARena"
+PAPER_TITLE = "HARENA"
 
 MODEL_IDS: dict[str, str] = {
     "AttendDiscriminate": "attend_discriminate",
@@ -145,6 +148,37 @@ def build_deployment() -> list[dict[str, Any]]:
     return rows
 
 
+def format_count(value: Any) -> str | None:
+    """Compact count as in the paper's efficiency table; None if the model has no count."""
+    if value is None or pd.isna(value) or float(value) <= 0:
+        return None
+    value = float(value)
+    for limit, suffix in ((1e9, "G"), (1e6, "M"), (1e3, "k")):
+        if value >= limit:
+            return f"{value / limit:.2f}{suffix}" if suffix != "k" else f"{value / limit:.1f}k"
+    return f"{value:.0f}"
+
+
+def update_model_counts() -> None:
+    """Params and MACs per model: means over the datasets, like the paper's efficiency table."""
+    runs = load_runs(window_s=COUNT_WINDOW_S, seed=SEED)
+    params = runs.groupby("model")["trainable_params"].mean()
+    mcu = load_mcu_runs(window_s=COUNT_WINDOW_S)
+    macs = pd.to_numeric(mcu["macs"], errors="coerce").groupby(mcu["model"]).mean()
+    path = GENERATED / "model-details.json"
+    details = json.loads(path.read_text(encoding="utf-8"))
+    for code, model_id in MODEL_IDS.items():
+        entry = details["models"].setdefault(model_id, {})
+        entry.pop("flops", None)
+        entry["params"] = format_count(params.get(code))
+        entry["macs"] = format_count(macs.get(code))
+    details["source"] = {
+        "window_size_seconds": COUNT_WINDOW_S,
+        "note": "Trainable parameters and MACs per inference, as means over the datasets.",
+    }
+    path.write_text(json.dumps(details, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def snapshot_date() -> str:
     """Date of the analysis commit the results come from."""
     return subprocess.run(
@@ -180,6 +214,7 @@ def main() -> None:
             "results": build_results(),
         },
     )
+    update_model_counts()
     write(
         "deployment.json",
         {
@@ -188,9 +223,9 @@ def main() -> None:
                 "snapshot_date": date,
                 "reference_model": REFERENCE_MODEL,
                 "devices": {
-                    "phone": "Galaxy S24 Ultra",
-                    "watch": "Galaxy Watch5 Pro",
-                    "mcu": "nRF5340",
+                    "phone": "Samsung Galaxy S24 Ultra",
+                    "watch": "Samsung Galaxy Watch5 Pro",
+                    "mcu": "Nordic nRF5340 DK",
                 },
             },
             "rows": build_deployment(),

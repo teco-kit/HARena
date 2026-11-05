@@ -17,6 +17,16 @@ Every planned run receives a deterministic fingerprint. If a matching result
 already exists, the run is skipped. When a dataset or model is added upstream,
 the planner detects the new matrix entries automatically.
 
+## Updating the Published Results
+
+The website shows the paper snapshot from `harena-analysis`. After its data changes, regenerate
+`paper-benchmark.json` and `deployment.json` in `apps/web/src/generated/`:
+
+```bash
+cd ../harena-analysis
+PYTHONPATH=src uv run --no-sync python ../whar-arena/scripts/export_harena_results.py
+```
+
 ## Quick Start
 
 ```bash

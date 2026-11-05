@@ -180,6 +180,8 @@
         {"name": "Fuhong Min", "affiliation": "School of Electrical and Automation Engineering, Nanjing Normal University, Nanjing, China"},
         {"name": "Aiguo Song", "affiliation": "School of Instrument Science and Engineering, Southeast University, Nanjing, China"}
       ]
-    }
+    },
+    "liteway": {"params": null, "flops": null, "institutions": [], "authors": [{"name": "Dominique Nshimyimana", "affiliation": ""}, {"name": "Vitor Fortes Rey", "affiliation": ""}, {"name": "Mengxi Liu", "affiliation": ""}, {"name": "Bo Zhou", "affiliation": ""}, {"name": "Paul Lukowicz", "affiliation": ""}]},
+    "liteway_light": {"params": null, "flops": null, "institutions": [], "authors": [{"name": "Dominique Nshimyimana", "affiliation": ""}, {"name": "Vitor Fortes Rey", "affiliation": ""}, {"name": "Mengxi Liu", "affiliation": ""}, {"name": "Bo Zhou", "affiliation": ""}, {"name": "Paul Lukowicz", "affiliation": ""}]}
   }
 }

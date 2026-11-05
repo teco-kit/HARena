@@ -15,7 +15,7 @@ type Dataset = {
 
 type DatasetDetail = {
   year: number;
-  citations: number;
+  citations: number | null;
   subjects: number;
   activities: number;
   settings: string;
@@ -175,8 +175,8 @@ const deviceTypeOptions = uniquePartsByLabel(
 const subjectsMax = roundMetricMax(datasets.map((dataset) => dataset.detail.subjects));
 const activitiesMax = roundMetricMax(datasets.map((dataset) => dataset.detail.activities));
 const channelsMax = roundMetricMax(datasets.map((dataset) => dataset.detail.channels));
-const snapshotDate = "May 1, 2026";
-const snapshotDateTime = "2026-05-01";
+const snapshotDate = "November 2, 2026";
+const snapshotDateTime = "2026-11-02";
 
 function splitList(value: string) {
   return value

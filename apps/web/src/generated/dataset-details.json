@@ -304,6 +304,16 @@
       "deviceTypes": "Node, Vest, Mask, Belt",
       "sensorModalities": "Acc, ECG, Resp, Gas, Flow",
       "channels": 28
+    },
+    "aicos_har": {
+      "year": 2026,
+      "citations": null,
+      "subjects": 94,
+      "activities": 11,
+      "settings": "ADL, Loc",
+      "deviceTypes": "Phone, Wearable",
+      "sensorModalities": "Acc, Gyr, Mag, Baro",
+      "channels": 10
     }
   }
 }

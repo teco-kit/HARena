@@ -38,51 +38,45 @@
     netImprovement: number | null;
     netImprovementCi95: number | null;
     macroF1: number | null;
-    latencyMs: number | null;
-    peakMemoryMb: number | null;
-    modelSizeMb: number | null;
-    efficiencyCombined: number | null;
-    efficiencyModelSize: number | null;
-    efficiencyPeakMemory: number | null;
-    efficiencyLatency: number | null;
-  };
-  type EfficiencyValues = {
-    efficiencyCombined: number | null;
-    efficiencyModelSize: number | null;
-    efficiencyPeakMemory: number | null;
-    efficiencyLatency: number | null;
-  };
-  type DatasetDeploymentMeasurement = {
-    latencyMs?: number;
-    peakMemoryMb?: number;
-    modelSizeMb?: number;
   };
   type MatrixCell = {
     modelId: string;
     modelName: string;
     macroF1: number | null;
   };
-  type DeploymentPoint = {
+  type McuStatus = "ok" | "no_fit_flash" | "no_fit_ram" | "failed" | null;
+  type DeploymentRow = {
     model_id: string;
-    benchmark_model_name: string;
-    name: string;
-    family: string;
-    mean_latency_ms: number | null;
-    mean_peak_pss_delta_mb: number | null;
-    exported_model_size_mb: number | null;
-    deployment_measurements: number;
-    deployment_dataset_count: number;
-    window_size_seconds?: number;
-    color: string;
+    dataset_id: string;
+    window_size_seconds: number;
+    phone_latency_ms: number | null;
+    phone_memory_mb: number | null;
+    phone_oom: boolean;
+    watch_latency_ms: number | null;
+    watch_memory_mb: number | null;
+    watch_oom: boolean;
+    mcu_status: McuStatus | string;
+    mcu_latency_ms: number | null;
+    mcu_ram_kb: number | null;
+    mcu_flash_kb: number | null;
+    mcu_energy_mj: number | null;
   };
-  type DeploymentTradeoffs = {
-    source: {
-      kind: string;
-      snapshot_date: string;
-      notes: string;
-    };
-    points: DeploymentPoint[];
+  type DeploymentData = {
+    source: { snapshot_date: string; reference_model: string; devices: Record<string, string> };
+    rows: DeploymentRow[];
   };
+  type DeviceId = "phone" | "watch" | "mcu";
+  type CostKey = "latency" | "memory" | "flash" | "energy";
+  type DeploymentMetric =
+    | "phone_latency_ms"
+    | "phone_memory_mb"
+    | "watch_latency_ms"
+    | "watch_memory_mb"
+    | "mcu_latency_ms"
+    | "mcu_ram_kb"
+    | "mcu_flash_kb"
+    | "mcu_energy_mj";
+  type McuMetric = "mcu_latency_ms" | "mcu_ram_kb" | "mcu_flash_kb" | "mcu_energy_mj";
   type PaperLink = {
     title: string;
     url: string;
@@ -117,7 +111,7 @@
   };
   type DatasetDetail = {
     year: number;
-    citations: number;
+    citations: number | null;
     subjects: number;
     activities: number;
     settings: string;
@@ -136,28 +130,18 @@
   type SortKey =
     | "net_improvement"
     | "macro_f1"
-    | "efficiency_combined"
-    | "efficiency_model_size"
-    | "efficiency_peak_memory"
-    | "efficiency_latency";
+    | `pareto:${DeploymentMetric}`;
   type SortDirection = "asc" | "desc";
-  type ViewId = "leaderboard" | "matrix" | "profiles" | "pareto";
+  type ViewId = "leaderboard" | "matrix" | "deployment" | "gap" | "pareto";
   type ComponentMatchMode = "inclusive" | "exact";
   type ScatterScale = "log" | "linear";
-  type ScatterMetric =
-    | "mean_latency_ms"
-    | "mean_peak_pss_delta_mb"
-    | "exported_model_size_mb";
-  type ProfileMetric =
-    | "macro_f1"
-    | "efficiency_latency"
-    | "efficiency_peak_memory"
-    | "efficiency_model_size"
-    | "efficiency_combined";
+  type ScatterMetric = DeploymentMetric;
   type ScatterConfig = {
     metric: ScatterMetric;
     title: string;
     xLabel: string;
+    group: string;
+    unit: string;
   };
   type ScatterPoint = {
     model_id: string;
@@ -188,23 +172,17 @@
   };
   type BestScoreKey =
     | "netImprovement"
-    | "macroF1"
-    | "efficiencyModelSize"
-    | "efficiencyPeakMemory"
-    | "efficiencyLatency"
-    | "efficiencyCombined";
+    | "macroF1";
 
   let {
     catalog,
-    datasetMeasurements = {},
     defaultWindowSizeSeconds = 3,
-    deploymentTradeoffs = null,
+    deployment,
     results,
   }: {
     catalog: Catalog;
-    datasetMeasurements?: Record<string, Record<string, DatasetDeploymentMeasurement>>;
     defaultWindowSizeSeconds?: number;
-    deploymentTradeoffs?: DeploymentTradeoffs | null;
+    deployment: DeploymentData;
     results: Result[];
   } = $props();
 
@@ -237,10 +215,9 @@
   let selectedDetailModelId = $state<string | null>(null);
   let selectedDetailDatasetId = $state<string | null>(null);
   let activeView = $state<ViewId>("leaderboard");
-  let highlightedProfileModelId = $state<string | null>(null);
-  let activeProfileMetric = $state<ProfileMetric>("macro_f1");
-  let profileScale = $state<ScatterScale>("log");
-  let activeScatterMetric = $state<ScatterMetric>("mean_latency_ms");
+  let selectedDevice = $state<DeviceId>("phone");
+  let activeDeploymentMetric = $state<DeploymentMetric>("phone_latency_ms");
+  let selectedCost = $state<CostKey>("latency");
   let scatterScale = $state<ScatterScale>("log");
   let showParetoFrontier = $state(true);
   let scatterTooltip = $state<{
@@ -266,6 +243,7 @@
     datasets: Record<string, PaperLink>;
     models: Record<string, PaperLink>;
   };
+  const gapBox = { width: 1100, height: 520, left: 56, right: 16, top: 24, bottom: 118 };
   const plotBox = {
     width: 920,
     height: 500,
@@ -274,72 +252,69 @@
     top: 30,
     bottom: 64,
   };
-  const profileBox = {
-    width: 1020,
-    height: 820,
-    centerX: 510,
-    centerY: 385,
-    radius: 275,
-    labelRadius: 335,
-  };
-  const scatterConfigs: ScatterConfig[] = [
-    {
-      metric: "mean_latency_ms",
-      title: "Mean LKSO Macro-f1 vs. Latency",
-      xLabel: "Mean latency (ms)",
-    },
-    {
-      metric: "mean_peak_pss_delta_mb",
-      title: "Mean LKSO Macro-f1 vs. Peak PSS Delta",
-      xLabel: "Mean peak PSS delta (MB)",
-    },
-    {
-      metric: "exported_model_size_mb",
-      title: "Mean LKSO Macro-f1 vs. Exported Model Size",
-      xLabel: "Exported model size (MB)",
-    },
-  ];
-  const profileMetricConfigs: Array<{
-    metric: ProfileMetric;
+  const deploymentMetricConfigs: Array<{
+    metric: DeploymentMetric;
+    group: string;
     label: string;
-    shortLabel: string;
+    unit: string;
   }> = [
-    { metric: "macro_f1", label: "Mean LKSO Macro-f1", shortLabel: "Macro-F1" },
-    {
-      metric: "efficiency_latency",
-      label: "Latency Efficiency Index",
-      shortLabel: "Latency index",
-    },
-    {
-      metric: "efficiency_peak_memory",
-      label: "Peak Memory Efficiency Index",
-      shortLabel: "Memory index",
-    },
-    {
-      metric: "efficiency_model_size",
-      label: "Model Size Efficiency Index",
-      shortLabel: "Model size index",
-    },
-    {
-      metric: "efficiency_combined",
-      label: "Joint Efficiency Index",
-      shortLabel: "Joint index",
-    },
+    { metric: "phone_latency_ms", group: "Phone", label: "Latency", unit: "ms" },
+    { metric: "phone_memory_mb", group: "Phone", label: "Peak memory", unit: "MB" },
+    { metric: "watch_latency_ms", group: "Watch", label: "Latency", unit: "ms" },
+    { metric: "watch_memory_mb", group: "Watch", label: "Peak memory", unit: "MB" },
+    { metric: "mcu_latency_ms", group: "MCU", label: "Latency", unit: "ms" },
+    { metric: "mcu_ram_kb", group: "MCU", label: "Peak RAM", unit: "KB" },
+    { metric: "mcu_flash_kb", group: "MCU", label: "Flash", unit: "KB" },
+    { metric: "mcu_energy_mj", group: "MCU", label: "Energy per inference", unit: "mJ" },
   ];
+  const deviceCosts: Record<DeviceId, Array<{ key: CostKey; label: string; metric: DeploymentMetric }>> = {
+    phone: [
+      { key: "latency", label: "Latency", metric: "phone_latency_ms" },
+      { key: "memory", label: "Peak Memory", metric: "phone_memory_mb" },
+    ],
+    watch: [
+      { key: "latency", label: "Latency", metric: "watch_latency_ms" },
+      { key: "memory", label: "Peak Memory", metric: "watch_memory_mb" },
+    ],
+    mcu: [
+      { key: "latency", label: "Latency", metric: "mcu_latency_ms" },
+      { key: "memory", label: "Peak RAM", metric: "mcu_ram_kb" },
+      { key: "flash", label: "Flash", metric: "mcu_flash_kb" },
+      { key: "energy", label: "Energy", metric: "mcu_energy_mj" },
+    ],
+  };
+  const deploymentGroups = ["Phone", "Watch", "MCU"];
+  const referenceModelId = deployment.source.reference_model;
+  const referenceModelName =
+    catalog.models.find((model) => model.id === referenceModelId)?.name ?? referenceModelId;
+  const mcuMinFits = 10;
+  const deploymentIndex = new Map(
+    deployment.rows.map((row) => [
+      `${row.window_size_seconds}|${row.dataset_id}|${row.model_id}`,
+      row,
+    ]),
+  );
+  const scatterConfigs: ScatterConfig[] = deploymentMetricConfigs.map((config) => {
+    const isMcu = config.group === "MCU";
+    const label = isMcu
+      ? `${config.label} relative to ${referenceModelName}`
+      : `Mean ${config.label.toLowerCase()} (${config.unit})`;
+    return {
+      metric: config.metric,
+      group: config.group,
+      unit: isMcu ? `× ${referenceModelName}` : config.unit,
+      title: `${config.group}: Macro-F1 vs. ${config.label}`,
+      xLabel: `${config.group} ${label}`,
+    };
+  });
   const numberFormatter = new Intl.NumberFormat("en-US");
   const metricInfo = {
     netImprovement:
       "Selection-dependent. For each selected dataset, subtracts the best classical baseline Macro-F1 from this model’s Macro-F1, then averages those differences. The interval is a 95% confidence interval across datasets; higher is better.",
     macroF1:
-      "Performance for the selected window size. Arithmetic mean of stored test LKSO Macro-F1 values across all benchmark datasets, with equal weight per dataset. Dataset, model, and component filters only control visibility; higher is better.",
-    efficiencyCombined:
-      "Mean of this model’s available dataset-level Joint Efficiency Indices. Each dataset combines Macro-F1 with log1p-transformed latency, peak-memory delta, and model size, normalized across models with every required measurement. Missing model–dataset values are excluded; filters do not recalculate it.",
-    efficiencyModelSize:
-      "Mean of this model’s available dataset-level Model Size Efficiency Indices. Each dataset normalizes Macro-F1 and log1p-transformed model size across models with both measurements. Missing model–dataset values are excluded; filters do not recalculate it.",
-    efficiencyPeakMemory:
-      "Mean of this model’s available dataset-level Peak Memory Efficiency Indices. Each dataset normalizes Macro-F1 and log1p-transformed peak PSS increase across models with both measurements. Missing model–dataset values are excluded; filters do not recalculate it.",
-    efficiencyLatency:
-      "Mean of this model’s available dataset-level Latency Efficiency Indices. Each dataset normalizes Macro-F1 and log1p-transformed latency across models with both measurements. Missing model–dataset values are excluded; filters do not recalculate it.",
+      "Performance for the selected window size. Arithmetic mean of stored mean test macro-f1 values across all benchmark datasets, with equal weight per dataset. Dataset, model, and component filters only control visibility; higher is better.",
+    pareto:
+      "Share of the selected datasets on which this model lies on the Pareto front of test macro-f1 against this cost on the selected device: no other model is both more accurate and cheaper on that dataset. All models compete regardless of the model filters; on the MCU only models that fit compete. Higher is better.",
   };
 
   const completeResults = $derived(
@@ -354,6 +329,9 @@
     ),
   );
   const selectedDatasetSet = $derived(new Set(selectedDatasetIds));
+  const selectedDatasets = $derived(
+    catalog.datasets.filter((item) => selectedDatasetSet.has(item.id)),
+  );
   const selectedModelFamilySet = $derived(new Set(selectedModelFamilyIds));
   const selectedModelSet = $derived(new Set(selectedModelIds));
   const datasetFilterOptions = $derived(
@@ -395,35 +373,29 @@
       (item) => selectedModelSet.has(item.id) && isFamilyAllowed(item.family),
     ).map((item) => ({ ...item, name: modelDisplayName(item.id, item.name) })),
   );
-  const deploymentPointByModelId = $derived(
+  const activeCosts = $derived(deviceCosts[selectedDevice]);
+  const activeCost = $derived(
+    activeCosts.find((cost) => cost.key === selectedCost) ?? activeCosts[0],
+  );
+  const activeScatterMetric = $derived(activeCost.metric);
+  const macroF1ByCase = $derived(
     new Map(
-      (deploymentTradeoffs?.points ?? [])
-        .filter(
-          (point) =>
-            (point.window_size_seconds ?? defaultWindowSizeSeconds) === selectedWindowSizeSeconds,
-        )
-        .map((point) => [point.model_id, point]),
+      validResults.flatMap((result) =>
+        typeof result.metrics.macro_f1 === "number"
+          ? [[`${result.dataset_id}|${result.model_id}`, result.metrics.macro_f1] as const]
+          : [],
+      ),
     ),
   );
-
-  const datasetEfficiencyScores = $derived(calculateDatasetEfficiencyScores());
+  const paretoFronts = $derived(computeParetoFronts());
   const benchmarkRows = $derived(
       catalog.models.map((model) => {
-        const deploymentPoint = deploymentPointByModelId.get(model.id);
-
         return {
           ...model,
           name: modelDisplayName(model.id, model.name),
           netImprovement: null,
           netImprovementCi95: null,
           macroF1: meanMacroF1AcrossDatasets(model.id),
-          latencyMs: deploymentPoint?.mean_latency_ms ?? null,
-          peakMemoryMb: deploymentPoint?.mean_peak_pss_delta_mb ?? null,
-          modelSizeMb: deploymentPoint?.exported_model_size_mb ?? null,
-          efficiencyCombined: averageDatasetEfficiency(model.id, "efficiencyCombined"),
-          efficiencyModelSize: averageDatasetEfficiency(model.id, "efficiencyModelSize"),
-          efficiencyPeakMemory: averageDatasetEfficiency(model.id, "efficiencyPeakMemory"),
-          efficiencyLatency: averageDatasetEfficiency(model.id, "efficiencyLatency"),
         };
       }),
   );
@@ -445,11 +417,32 @@
   const bestScores = $derived({
     netImprovement: bestScoreValue(rows, "netImprovement", "desc"),
     macroF1: bestScoreValue(rows, "macroF1", "desc"),
-    efficiencyModelSize: bestScoreValue(rows, "efficiencyModelSize", "desc"),
-    efficiencyPeakMemory: bestScoreValue(rows, "efficiencyPeakMemory", "desc"),
-    efficiencyLatency: bestScoreValue(rows, "efficiencyLatency", "desc"),
-    efficiencyCombined: bestScoreValue(rows, "efficiencyCombined", "desc"),
   });
+  const bestParetoShares = $derived(
+    new Map(
+      activeCosts.map((cost) => [
+        cost.metric,
+        Math.max(0, ...rows.map((row) => paretoShare(row.id, cost.metric) ?? 0)),
+      ]),
+    ),
+  );
+  const paretoMatrixDatasets = $derived(
+    [...selectedDatasets]
+      .map((dataset) => ({
+        ...dataset,
+        meanF1: averageAvailable(catalog.models.map((model) => modelMacroF1(model.id, dataset.id))) ?? 0,
+      }))
+      .sort((a, b) => b.meanF1 - a.meanF1),
+  );
+  const paretoMatrixRows = $derived(
+    visibleModels
+      .map((model) => ({
+        id: model.id,
+        name: model.name,
+        share: paretoShare(model.id, activeScatterMetric),
+      }))
+      .sort((a, b) => (b.share ?? -1) - (a.share ?? -1)),
+  );
   const netImprovementScale = $derived(getNetImprovementScale(rows));
   const activeScatterConfig = $derived(
     scatterConfigs.find((config) => config.metric === activeScatterMetric) ?? scatterConfigs[0],
@@ -490,28 +483,87 @@
   const matrixGrandMean = $derived(
     averageAvailable(matrixRows.flatMap((row) => row.cells.map((cell) => cell.macroF1))),
   );
-  const activeProfileMetricConfig = $derived(
-    profileMetricConfigs.find((config) => config.metric === activeProfileMetric) ??
-      profileMetricConfigs[0],
+  const activeDeploymentConfig = $derived(
+    deploymentMetricConfigs.find((config) => config.metric === activeDeploymentMetric) ??
+      deploymentMetricConfigs[0],
   );
-  const profileRows = $derived(
-    matrixRows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      values: visibleModels.map((model, modelIndex) =>
-        profileMetricValue(model.id, row.id, row.cells[modelIndex]?.macroF1 ?? null),
-      ),
-    })),
+  const deploymentSummaryRows = $derived(
+    visibleModels
+      .map((model) => ({
+        id: model.id,
+        name: model.name,
+        macroF1: selectedMeanMacroF1(model.id),
+        phoneLatency: deviceMean(model.id, "phone_latency_ms"),
+        phoneMemory: deviceMean(model.id, "phone_memory_mb"),
+        watchLatency: deviceMean(model.id, "watch_latency_ms"),
+        watchMemory: deviceMean(model.id, "watch_memory_mb"),
+        fits: mcuFitCount(model.id),
+        mcuLatency: mcuRelativeCost(model.id, "mcu_latency_ms"),
+        mcuRam: mcuRelativeCost(model.id, "mcu_ram_kb"),
+        mcuFlash: mcuRelativeCost(model.id, "mcu_flash_kb"),
+        mcuEnergy: mcuRelativeCost(model.id, "mcu_energy_mj"),
+      }))
+      .sort((a, b) => (b.macroF1 ?? -1) - (a.macroF1 ?? -1)),
   );
-  const profileSeries = $derived(
-    visibleModels.map((model, modelIndex) => ({
-      ...model,
-      marker: modelMarker(model.id),
-      values: profileRows.map((row) => row.values[modelIndex] ?? null),
-    })),
+  const deploymentSummaryBest = $derived({
+    phoneLatency: minOf(deploymentSummaryRows.map((row) => row.phoneLatency)),
+    phoneMemory: minOf(deploymentSummaryRows.map((row) => row.phoneMemory)),
+    watchLatency: minOf(deploymentSummaryRows.map((row) => row.watchLatency)),
+    watchMemory: minOf(deploymentSummaryRows.map((row) => row.watchMemory)),
+    mcuLatency: minOf(deploymentSummaryRows.filter((row) => row.fits >= mcuMinFits).map((row) => row.mcuLatency)),
+    mcuRam: minOf(deploymentSummaryRows.filter((row) => row.fits >= mcuMinFits).map((row) => row.mcuRam)),
+    mcuFlash: minOf(deploymentSummaryRows.filter((row) => row.fits >= mcuMinFits).map((row) => row.mcuFlash)),
+    mcuEnergy: minOf(deploymentSummaryRows.filter((row) => row.fits >= mcuMinFits).map((row) => row.mcuEnergy)),
+  });
+  const deploymentMatrixRows = $derived(
+    selectedDatasets.map((dataset) => {
+      const cells = visibleModels.map((model) =>
+        deploymentCell(model.id, model.name, dataset.id, activeDeploymentMetric),
+      );
+      const values = cells.flatMap((cell) => (cell.value !== null && cell.value > 0 ? [cell.value] : []));
+      return {
+        ...dataset,
+        cells,
+        min: values.length ? Math.min(...values) : null,
+        max: values.length ? Math.max(...values) : null,
+      };
+    }),
   );
-  const profileScaleMax = 1;
-  const profileLogStrength = 4;
+  const gapColumns = $derived(
+    selectedDatasets
+      .map((dataset) => {
+        const points = visibleModels.flatMap((model) => {
+          const result = validResults.find(
+            (item) => item.dataset_id === dataset.id && item.model_id === model.id,
+          );
+          const test = result?.metrics.macro_f1;
+          const val = result?.metrics.val_macro_f1;
+          if (typeof test !== "number" || typeof val !== "number") return [];
+          return [{ modelId: model.id, name: model.name, gap: (val - test) * 100, val, test }];
+        });
+        const gaps = points.map((point) => point.gap);
+        const mean = gaps.length ? averageValues(gaps) : 0;
+        return {
+          id: dataset.id,
+          name: dataset.name,
+          subjects: datasetDetailMap[dataset.id]?.subjects ?? null,
+          points,
+          mean,
+          std: gaps.length > 1 ? sampleStandardDeviation(gaps, mean) : 0,
+        };
+      })
+      .filter((column) => column.points.length > 0)
+      .sort((a, b) => b.mean - a.mean),
+  );
+  const gapYMin = $derived(
+    Math.min(0, Math.floor(Math.min(0, ...gapColumns.flatMap((c) => c.points.map((p) => p.gap))) / 10) * 10),
+  );
+  const gapYMax = $derived(
+    Math.max(10, Math.ceil(Math.max(0, ...gapColumns.flatMap((c) => c.points.map((p) => p.gap))) / 10) * 10),
+  );
+  const gapTicks = $derived(
+    Array.from({ length: Math.round((gapYMax - gapYMin) / 10) + 1 }, (_, index) => gapYMin + index * 10),
+  );
 
   function averageMetric(items: Result[], metric: string) {
     const values = items
@@ -543,14 +595,9 @@
       comparison = compareNullableNumber(a.macroF1, b.macroF1, sortDirection);
     } else if (sortKey === "net_improvement") {
       comparison = compareNullableNumber(a.netImprovement, b.netImprovement, sortDirection);
-    } else if (sortKey === "efficiency_combined") {
-      comparison = compareNullableNumber(a.efficiencyCombined, b.efficiencyCombined, sortDirection);
-    } else if (sortKey === "efficiency_model_size") {
-      comparison = compareNullableNumber(a.efficiencyModelSize, b.efficiencyModelSize, sortDirection);
-    } else if (sortKey === "efficiency_peak_memory") {
-      comparison = compareNullableNumber(a.efficiencyPeakMemory, b.efficiencyPeakMemory, sortDirection);
     } else {
-      comparison = compareNullableNumber(a.efficiencyLatency, b.efficiencyLatency, sortDirection);
+      const metric = sortKey.slice("pareto:".length) as DeploymentMetric;
+      comparison = compareNullableNumber(paretoShare(a.id, metric), paretoShare(b.id, metric), sortDirection);
     }
 
     if (comparison !== 0) return comparison;
@@ -799,6 +846,7 @@
     selectedModelIds = catalog.models.map((item) => item.id);
     selectedModelFamilyIds = getModelFamilyIds(catalog.models);
     selectedWindowSizeSeconds = defaultWindowSizeSeconds;
+    selectedDevice = "phone";
     componentMatchMode = "inclusive";
   }
 
@@ -814,179 +862,166 @@
       .map((model) => model.id);
   }
 
-  function datasetDeploymentCost(
-    modelId: string,
-    datasetId: string,
-    costKey: "modelSizeMb" | "peakMemoryMb" | "latencyMs",
-  ) {
-    const measured = datasetMeasurements[datasetId]?.[modelId]?.[costKey];
-    if (typeof measured === "number" && Number.isFinite(measured)) return measured;
-
-    const resultMetricKeys = {
-      modelSizeMb: ["exported_model_size_mb", "model_size_mb"],
-      peakMemoryMb: ["peak_pss_delta_mb", "mean_peak_pss_delta_mb"],
-      latencyMs: ["latency_ms", "mean_latency_ms"],
-    } as const;
-    const scopedResults = validResults.filter(
-      (result) => result.model_id === modelId && result.dataset_id === datasetId,
-    );
-
-    for (const metric of resultMetricKeys[costKey]) {
-      const value = averageMetric(scopedResults, metric);
-      if (value !== null) return value;
-    }
-    return null;
+  function deploymentRow(modelId: string, datasetId: string) {
+    return deploymentIndex.get(`${selectedWindowSizeSeconds}|${datasetId}|${modelId}`) ?? null;
   }
 
-  function calculateDatasetEfficiencyScores() {
-    const byDataset = new Map<string, Map<string, EfficiencyValues>>();
+  function modelMacroF1(modelId: string, datasetId: string) {
+    return macroF1ByCase.get(`${datasetId}|${modelId}`) ?? null;
+  }
 
-    catalog.datasets.forEach((dataset) => {
-      const rows = catalog.models.map((model) => ({
-        id: model.id,
-        macroF1: averageMetric(
+  /** Per cost and dataset, the models no other model beats on both Macro-F1 and cost. */
+  function computeParetoFronts() {
+    const fronts = new Map<DeploymentMetric, Map<string, Set<string>>>();
+    for (const { metric } of deploymentMetricConfigs) {
+      const byDataset = new Map<string, Set<string>>();
+      for (const dataset of catalog.datasets) {
+        const points = catalog.models
+          .flatMap((model) => {
+            const row = deploymentRow(model.id, dataset.id);
+            const cost = row?.[metric] ?? null;
+            const f1 = modelMacroF1(model.id, dataset.id);
+            if (cost === null || f1 === null) return [];
+            if (isMcuMetric(metric) && row?.mcu_status !== "ok") return [];
+            return [{ id: model.id, cost, f1 }];
+          })
+          .sort((a, b) => a.cost - b.cost || b.f1 - a.f1);
+        const front = new Set<string>();
+        let best = -Infinity;
+        for (const point of points) {
+          if (point.f1 > best) {
+            front.add(point.id);
+            best = point.f1;
+          }
+        }
+        byDataset.set(dataset.id, front);
+      }
+      fronts.set(metric, byDataset);
+    }
+    return fronts;
+  }
+
+  function isOnParetoFront(modelId: string, datasetId: string, metric: DeploymentMetric) {
+    return paretoFronts.get(metric)?.get(datasetId)?.has(modelId) ?? false;
+  }
+
+  function paretoShare(modelId: string, metric: DeploymentMetric) {
+    if (selectedDatasets.length === 0) return null;
+    const hits = selectedDatasets.filter((dataset) => isOnParetoFront(modelId, dataset.id, metric));
+    return hits.length / selectedDatasets.length;
+  }
+
+  function setDeviceSort() {
+    if (sortKey.startsWith("pareto:")) sortKey = "macro_f1";
+  }
+
+  function selectedMeanMacroF1(modelId: string) {
+    return averageAvailable(
+      selectedDatasets.map((dataset) =>
+        averageMetric(
           validResults.filter(
-            (result) => result.model_id === model.id && result.dataset_id === dataset.id,
+            (result) => result.model_id === modelId && result.dataset_id === dataset.id,
           ),
           "macro_f1",
         ),
-        modelSizeMb: datasetDeploymentCost(model.id, dataset.id, "modelSizeMb"),
-        peakMemoryMb: datasetDeploymentCost(model.id, dataset.id, "peakMemoryMb"),
-        latencyMs: datasetDeploymentCost(model.id, dataset.id, "latencyMs"),
-      }));
-      const modelSizeScores = datasetEfficiencyIndexScores(rows, "modelSizeMb");
-      const peakMemoryScores = datasetEfficiencyIndexScores(rows, "peakMemoryMb");
-      const latencyScores = datasetEfficiencyIndexScores(rows, "latencyMs");
-      const combinedScores = datasetCombinedEfficiencyScores(rows);
-      const modelScores = new Map<string, EfficiencyValues>();
-
-      catalog.models.forEach((model) => {
-        modelScores.set(model.id, {
-          efficiencyCombined: combinedScores.get(model.id) ?? null,
-          efficiencyModelSize: modelSizeScores.get(model.id) ?? null,
-          efficiencyPeakMemory: peakMemoryScores.get(model.id) ?? null,
-          efficiencyLatency: latencyScores.get(model.id) ?? null,
-        });
-      });
-      byDataset.set(dataset.id, modelScores);
-    });
-
-    return byDataset;
-  }
-
-  function averageDatasetEfficiency(modelId: string, key: keyof EfficiencyValues) {
-    const values = catalog.datasets.map(
-      (dataset) => datasetEfficiencyScores.get(dataset.id)?.get(modelId)?.[key] ?? null,
+      ),
     );
-    return averageAvailable(values);
   }
 
-  function datasetEfficiencyIndexScores<
-    Row extends {
-      id: string;
-      macroF1: number | null;
-      modelSizeMb: number | null;
-      peakMemoryMb: number | null;
-      latencyMs: number | null;
-    },
-  >(
-    rows: Row[],
-    costKey: "modelSizeMb" | "peakMemoryMb" | "latencyMs",
+  function deviceMean(modelId: string, metric: DeploymentMetric) {
+    return averageAvailable(
+      selectedDatasets.map((dataset) => deploymentRow(modelId, dataset.id)?.[metric] ?? null),
+    );
+  }
+
+  function mcuFitCount(modelId: string) {
+    return selectedDatasets.filter(
+      (dataset) => deploymentRow(modelId, dataset.id)?.mcu_status === "ok",
+    ).length;
+  }
+
+  /** Geometric mean of the cost ratio to the reference model, on datasets where both fit. */
+  function mcuRelativeCost(modelId: string, metric: McuMetric) {
+    const logs = selectedDatasets.flatMap((dataset) => {
+      const row = deploymentRow(modelId, dataset.id);
+      const reference = deploymentRow(referenceModelId, dataset.id);
+      if (row?.mcu_status !== "ok" || reference?.mcu_status !== "ok") return [];
+      const value = row[metric];
+      const base = reference[metric];
+      return value !== null && base !== null && value > 0 && base > 0
+        ? [Math.log(value / base)]
+        : [];
+    });
+    return logs.length ? Math.exp(averageValues(logs)) : null;
+  }
+
+  function isMcuMetric(metric: DeploymentMetric): metric is McuMetric {
+    return metric.startsWith("mcu_");
+  }
+
+  function minOf(values: Array<number | null>) {
+    const present = values.filter((value): value is number => value !== null);
+    return present.length ? Math.min(...present) : null;
+  }
+
+  function deploymentCell(
+    modelId: string,
+    modelName: string,
+    datasetId: string,
+    metric: DeploymentMetric,
   ) {
-    const eligible = rows.filter(
-      (row) => row.macroF1 !== null && isNonNegativeFinite(row[costKey]),
-    );
-    const scores = new Map<string, number>();
-
-    if (eligible.length === 0) return scores;
-
-    const f1Extent = extent(eligible.map((row) => row.macroF1 as number));
-    const costExtent = extent(eligible.map((row) => Math.log1p(row[costKey] as number)));
-
-    eligible.forEach((row) => {
-      const f1Norm = normalize(row.macroF1 as number, f1Extent.min, f1Extent.max, 1);
-      const costNorm = normalize(
-        Math.log1p(row[costKey] as number),
-        costExtent.min,
-        costExtent.max,
-        0,
-      );
-      scores.set(row.id, 1 - Math.sqrt(0.5 * (1 - f1Norm) ** 2 + 0.5 * costNorm ** 2));
-    });
-
-    return scores;
+    const row = deploymentRow(modelId, datasetId);
+    let flag: string | null = null;
+    let reason = "No measurement";
+    if (row && metric.startsWith("phone_") && row.phone_oom) {
+      flag = "M";
+      reason = "Out of memory on the phone";
+    } else if (row && metric.startsWith("watch_") && row.watch_oom) {
+      flag = "M";
+      reason = "Out of memory on the watch";
+    } else if (row && isMcuMetric(metric) && row.mcu_status !== "ok" && !(metric === "mcu_flash_kb" && row.mcu_flash_kb !== null)) {
+      if (row.mcu_status === "no_fit_flash") {
+        flag = "F";
+        reason = "Exceeds the MCU flash";
+      } else if (row.mcu_status === "no_fit_ram") {
+        flag = "R";
+        reason = "Exceeds the MCU RAM";
+      } else if (row.mcu_status === "failed") {
+        flag = "E";
+        reason = "Export or execution failed";
+      }
+    }
+    return { modelId, modelName, value: flag ? null : (row?.[metric] ?? null), flag, reason };
   }
 
-  function datasetCombinedEfficiencyScores<
-    Row extends {
-      id: string;
-      macroF1: number | null;
-      modelSizeMb: number | null;
-      peakMemoryMb: number | null;
-      latencyMs: number | null;
-    },
-  >(rows: Row[]) {
-    const eligible = rows.filter(
-      (row) =>
-        row.macroF1 !== null &&
-        isNonNegativeFinite(row.latencyMs) &&
-        isNonNegativeFinite(row.peakMemoryMb) &&
-        isNonNegativeFinite(row.modelSizeMb),
-    );
-    const scores = new Map<string, number>();
-
-    if (eligible.length === 0) return scores;
-
-    const f1Extent = extent(eligible.map((row) => row.macroF1 as number));
-    const latencyExtent = extent(eligible.map((row) => Math.log1p(row.latencyMs as number)));
-    const memoryExtent = extent(eligible.map((row) => Math.log1p(row.peakMemoryMb as number)));
-    const sizeExtent = extent(eligible.map((row) => Math.log1p(row.modelSizeMb as number)));
-
-    eligible.forEach((row) => {
-      const f1Norm = normalize(row.macroF1 as number, f1Extent.min, f1Extent.max, 1);
-      const latencyNorm = normalize(
-        Math.log1p(row.latencyMs as number),
-        latencyExtent.min,
-        latencyExtent.max,
-        0,
-      );
-      const memoryNorm = normalize(
-        Math.log1p(row.peakMemoryMb as number),
-        memoryExtent.min,
-        memoryExtent.max,
-        0,
-      );
-      const sizeNorm = normalize(
-        Math.log1p(row.modelSizeMb as number),
-        sizeExtent.min,
-        sizeExtent.max,
-        0,
-      );
-
-      scores.set(
-        row.id,
-        1 -
-          Math.sqrt(
-            0.5 * (1 - f1Norm) ** 2 +
-              (1 / 6) * latencyNorm ** 2 +
-              (1 / 6) * memoryNorm ** 2 +
-              (1 / 6) * sizeNorm ** 2,
-          ),
-      );
-    });
-
-    return scores;
+  function deploymentCellStyle(value: number | null, min: number | null, max: number | null) {
+    if (value === null || value <= 0 || min === null || max === null) return "";
+    if (max <= min) return scoreStyle(1);
+    return scoreStyle(1 - (Math.log(value) - Math.log(min)) / (Math.log(max) - Math.log(min)));
   }
 
-  function isNonNegativeFinite(value: number | null) {
-    return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  function formatCost(value: number | null) {
+    if (value === null) return "-";
+    if (value >= 1000) return numberFormatter.format(Math.round(value));
+    if (value >= 100) return value.toFixed(0);
+    if (value >= 10) return value.toFixed(1);
+    return value.toFixed(2);
   }
 
-  function extent(values: number[]) {
-    return {
-      min: Math.min(...values),
-      max: Math.max(...values),
-    };
+  function gapX(index: number) {
+    const inner = gapBox.width - gapBox.left - gapBox.right;
+    return gapBox.left + (inner * (index + 0.5)) / Math.max(gapColumns.length, 1);
+  }
+
+  function gapY(value: number) {
+    const inner = gapBox.height - gapBox.top - gapBox.bottom;
+    return gapBox.top + inner * (1 - (value - gapYMin) / (gapYMax - gapYMin));
+  }
+
+  /** Stable horizontal offset per model, so dots with similar gaps stay visible. */
+  function gapJitter(modelId: string) {
+    const index = catalog.models.findIndex((model) => model.id === modelId);
+    return ((index + 0.5) / catalog.models.length - 0.5) * 18;
   }
 
   function normalize(value: number, min: number, max: number, fallback: number) {
@@ -997,109 +1032,6 @@
   function formatPercent(score: number | null) {
     if (score === null) return "pending";
     return `${(score * 100).toFixed(1)}%`;
-  }
-
-  function profileAngle(index: number, count: number) {
-    return -Math.PI / 2 + (index * Math.PI * 2) / Math.max(1, count);
-  }
-
-  function profilePolarPoint(radius: number, index: number, count: number) {
-    const angle = profileAngle(index, count);
-    return {
-      x: profileBox.centerX + Math.cos(angle) * radius,
-      y: profileBox.centerY + Math.sin(angle) * radius,
-    };
-  }
-
-  function profileMetricValue(
-    modelId: string,
-    datasetId: string,
-    macroF1: number | null,
-  ) {
-    if (activeProfileMetric === "macro_f1") return macroF1;
-    const values = datasetEfficiencyScores.get(datasetId)?.get(modelId);
-    if (!values) return null;
-
-    const indexValues: Record<Exclude<ProfileMetric, "macro_f1">, number | null> = {
-      efficiency_latency: values.efficiencyLatency,
-      efficiency_peak_memory: values.efficiencyPeakMemory,
-      efficiency_model_size: values.efficiencyModelSize,
-      efficiency_combined: values.efficiencyCombined,
-    };
-    return indexValues[activeProfileMetric];
-  }
-
-  function profileNormalizedValue(value: number | null) {
-    if (value === null || profileScaleMax <= 0) return 0;
-    if (profileScale === "log") {
-      const clamped = Math.max(0, Math.min(1, value));
-      return (
-        1 -
-        Math.log1p(profileLogStrength * (1 - clamped)) /
-          Math.log1p(profileLogStrength)
-      );
-    }
-    return Math.max(0, Math.min(1, value / profileScaleMax));
-  }
-
-  function profileValuePoint(value: number | null, index: number, count: number) {
-    const normalized = profileNormalizedValue(value);
-    return profilePolarPoint(profileBox.radius * normalized, index, count);
-  }
-
-  function profileSeriesPath(values: Array<number | null>) {
-    if (values.length === 0) return "";
-    const firstMissing = values.findIndex((value) => value === null);
-    const startIndex = firstMissing === -1 ? 0 : (firstMissing + 1) % values.length;
-    const commands: string[] = [];
-    let segmentOpen = false;
-
-    for (let offset = 0; offset < values.length; offset += 1) {
-      const index = (startIndex + offset) % values.length;
-      const value = values[index];
-      if (value === null) {
-        segmentOpen = false;
-        continue;
-      }
-      const point = profileValuePoint(value, index, values.length);
-      commands.push(`${segmentOpen ? "L" : "M"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`);
-      segmentOpen = true;
-    }
-
-    if (firstMissing === -1) commands.push("Z");
-    return commands.join(" ");
-  }
-
-  function profileGridPoints(level: number, count: number) {
-    return Array.from({ length: count }, (_, index) => {
-      const point = profilePolarPoint(profileBox.radius * level, index, count);
-      return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-    }).join(" ");
-  }
-
-  function profileLabelAnchor(x: number) {
-    if (Math.abs(x - profileBox.centerX) < 24) return "middle";
-    return x < profileBox.centerX ? "end" : "start";
-  }
-
-  function profileLineDash(index: number) {
-    return ["", "8 5", "3 4", "11 4 2 4"][index % 4];
-  }
-
-  function formatProfileValue(value: number | null) {
-    if (value === null) return "pending";
-    return `${(value * 100).toFixed(1)}%`;
-  }
-
-  function profileScaleLabel(level: number) {
-    if (profileScale === "log") {
-      const gap =
-        ((1 + profileLogStrength) ** (1 - level) - 1) /
-        profileLogStrength;
-      const value = 1 - gap;
-      return `${Math.round(value * 100)}%`;
-    }
-    return `${Math.round(level * 100)}%`;
   }
 
   function formatNetImprovement(score: number | null) {
@@ -1156,10 +1088,6 @@
     return (score * 100).toFixed(1);
   }
 
-  function formatIndex(score: number | null) {
-    if (score === null) return "pending";
-    return `${(score * 100).toFixed(1)}%`;
-  }
 
   function formatModelSize(size: number | null) {
     if (size === null) return "";
@@ -1393,13 +1321,13 @@
   function createScatterPlot(config: ScatterConfig, scale: ScatterScale): ScatterPlot {
     const rawPoints = rows.flatMap((row) => {
       const metricValue = scatterMetricValue(row, config.metric);
+      const macroF1 = selectedMeanMacroF1(row.id);
 
       if (
         typeof metricValue !== "number" ||
         !Number.isFinite(metricValue) ||
         (scale === "log" && metricValue <= 0) ||
-        typeof row.macroF1 !== "number" ||
-        !Number.isFinite(row.macroF1)
+        macroF1 === null
       ) {
         return [];
       }
@@ -1411,7 +1339,7 @@
           family: row.family,
           color: modelMarker(row.id).color,
           x: metricValue,
-          y: row.macroF1,
+          y: macroF1,
         },
       ];
     });
@@ -1483,9 +1411,7 @@
   }
 
   function scatterMetricValue(row: LeaderboardRow, metric: ScatterMetric) {
-    if (metric === "mean_latency_ms") return row.latencyMs;
-    if (metric === "mean_peak_pss_delta_mb") return row.peakMemoryMb;
-    return row.modelSizeMb;
+    return isMcuMetric(metric) ? mcuRelativeCost(row.id, metric) : deviceMean(row.id, metric);
   }
 
   function dominates(
@@ -1569,10 +1495,8 @@
     return `${(value * 100).toFixed(0)}%`;
   }
 
-  function formatScatterValue(value: number, metric: ScatterMetric) {
-    if (metric === "mean_latency_ms") return `${value.toFixed(2)} ms latency`;
-    if (metric === "mean_peak_pss_delta_mb") return `${value.toFixed(2)} MB peak PSS`;
-    return `${value.toFixed(2)} MB model size`;
+  function formatScatterValue(value: number, _metric: ScatterMetric) {
+    return `${value.toFixed(2)} ${activeScatterConfig.unit}`;
   }
 
   function showScatterTooltip(event: MouseEvent, point: ScatterPoint) {
@@ -1834,6 +1758,17 @@
           </select>
         </span>
       </label>
+
+      <label class="dataset-filter window-size-filter">
+        <span class="filter-label">Device</span>
+        <span class="window-size-select">
+          <select bind:value={selectedDevice} onchange={setDeviceSort} aria-label="Device for the Pareto fronts and trade-offs">
+            <option value="phone">Phone</option>
+            <option value="watch">Watch</option>
+            <option value="mcu">MCU</option>
+          </select>
+        </span>
+      </label>
     </div>
   </section>
 
@@ -1862,15 +1797,26 @@
       Efficiency Trade-offs
     </button>
     <button
-      id="profiles-tab"
+      id="deployment-tab"
       type="button"
       role="tab"
-      aria-selected={activeView === "profiles"}
-      aria-controls="profiles-view"
-      class:active={activeView === "profiles"}
-      onclick={() => (activeView = "profiles")}
+      aria-selected={activeView === "deployment"}
+      aria-controls="deployment-view"
+      class:active={activeView === "deployment"}
+      onclick={() => (activeView = "deployment")}
     >
-      Performance Profiles
+      Deployment
+    </button>
+    <button
+      id="gap-tab"
+      type="button"
+      role="tab"
+      aria-selected={activeView === "gap"}
+      aria-controls="gap-view"
+      class:active={activeView === "gap"}
+      onclick={() => (activeView = "gap")}
+    >
+      Generalization Gap
     </button>
     <button
       id="matrix-tab"
@@ -1895,7 +1841,7 @@
       <div class="panel-header">
         <div class="panel-heading">
         <h2>Rankings</h2>
-          <p>Compare overall predictive performance and deployment efficiency across models.</p>
+          <p>Compare predictive performance across models, and how often each model lies on a per-dataset Pareto front on the selected device.</p>
         </div>
       </div>
 
@@ -1913,7 +1859,7 @@
                   onclick={() => setSort("net_improvement")}
                 >
                   <span class="heading-label">
-                    Net Improvement
+                    Net Mean Test Macro-F1 Improvement
                     <span
                       class="info-tip"
                       title={metricInfo.netImprovement}
@@ -1944,7 +1890,7 @@
                   onclick={() => setSort("macro_f1")}
                 >
                   <span class="heading-label">
-                    MEAN LKSO MACRO F1
+                    MEAN TEST MACRO-F1
                     <span
                       class="info-tip"
                       title={metricInfo.macroF1}
@@ -1961,110 +1907,35 @@
                 </button>
               </span>
             </th>
-            <th aria-sort={sortAria("efficiency_model_size")}>
-              <span class="metric-heading">
-                <button
-                  type="button"
-                  class:active-sort={sortKey === "efficiency_model_size"}
-                  class="sort-button"
-                  onclick={() => setSort("efficiency_model_size")}
-                >
-                  <span class="heading-label">
-                    Model Size Index
-                    <span
-                      class="info-tip"
-                      title={metricInfo.efficiencyModelSize}
-                      aria-label={metricInfo.efficiencyModelSize}
-                      data-tip={metricInfo.efficiencyModelSize}
-                    >
-                      ⓘ
+            {#each activeCosts as cost}
+              {@const key = `pareto:${cost.metric}` as SortKey}
+              <th aria-sort={sortAria(key)}>
+                <span class="metric-heading">
+                  <button
+                    type="button"
+                    class:active-sort={sortKey === key}
+                    class="sort-button"
+                    onclick={() => setSort(key)}
+                  >
+                    <span class="heading-label">
+                      {cost.label} Pareto Share
+                      <span
+                        class="info-tip"
+                        title={metricInfo.pareto}
+                        aria-label={metricInfo.pareto}
+                        data-tip={metricInfo.pareto}
+                      >
+                        ⓘ
+                      </span>
                     </span>
-                  </span>
-                  <span class="sort-glyph" aria-hidden="true">
-                    <span class:active-arrow={sortKey === "efficiency_model_size" && sortDirection === "asc"}></span>
-                    <span class:active-arrow={sortKey === "efficiency_model_size" && sortDirection === "desc"}></span>
-                  </span>
-                </button>
-              </span>
-            </th>
-            <th aria-sort={sortAria("efficiency_peak_memory")}>
-              <span class="metric-heading">
-                <button
-                  type="button"
-                  class:active-sort={sortKey === "efficiency_peak_memory"}
-                  class="sort-button"
-                  onclick={() => setSort("efficiency_peak_memory")}
-                >
-                  <span class="heading-label">
-                    Peak Memory Index
-                    <span
-                      class="info-tip"
-                      title={metricInfo.efficiencyPeakMemory}
-                      aria-label={metricInfo.efficiencyPeakMemory}
-                      data-tip={metricInfo.efficiencyPeakMemory}
-                    >
-                      ⓘ
+                    <span class="sort-glyph" aria-hidden="true">
+                      <span class:active-arrow={sortKey === key && sortDirection === "asc"}></span>
+                      <span class:active-arrow={sortKey === key && sortDirection === "desc"}></span>
                     </span>
-                  </span>
-                  <span class="sort-glyph" aria-hidden="true">
-                    <span class:active-arrow={sortKey === "efficiency_peak_memory" && sortDirection === "asc"}></span>
-                    <span class:active-arrow={sortKey === "efficiency_peak_memory" && sortDirection === "desc"}></span>
-                  </span>
-                </button>
-              </span>
-            </th>
-            <th aria-sort={sortAria("efficiency_latency")}>
-              <span class="metric-heading">
-                <button
-                  type="button"
-                  class:active-sort={sortKey === "efficiency_latency"}
-                  class="sort-button"
-                  onclick={() => setSort("efficiency_latency")}
-                >
-                  <span class="heading-label">
-                    Latency Index
-                    <span
-                      class="info-tip"
-                      title={metricInfo.efficiencyLatency}
-                      aria-label={metricInfo.efficiencyLatency}
-                      data-tip={metricInfo.efficiencyLatency}
-                    >
-                      ⓘ
-                    </span>
-                  </span>
-                  <span class="sort-glyph" aria-hidden="true">
-                    <span class:active-arrow={sortKey === "efficiency_latency" && sortDirection === "asc"}></span>
-                    <span class:active-arrow={sortKey === "efficiency_latency" && sortDirection === "desc"}></span>
-                  </span>
-                </button>
-              </span>
-            </th>
-            <th aria-sort={sortAria("efficiency_combined")}>
-              <span class="metric-heading">
-                <button
-                  type="button"
-                  class:active-sort={sortKey === "efficiency_combined"}
-                  class="sort-button"
-                  onclick={() => setSort("efficiency_combined")}
-                >
-                  <span class="heading-label">
-                    Joint Index
-                    <span
-                      class="info-tip"
-                      title={metricInfo.efficiencyCombined}
-                      aria-label={metricInfo.efficiencyCombined}
-                      data-tip={metricInfo.efficiencyCombined}
-                    >
-                      ⓘ
-                    </span>
-                  </span>
-                  <span class="sort-glyph" aria-hidden="true">
-                    <span class:active-arrow={sortKey === "efficiency_combined" && sortDirection === "asc"}></span>
-                    <span class:active-arrow={sortKey === "efficiency_combined" && sortDirection === "desc"}></span>
-                  </span>
-                </button>
-              </span>
-            </th>
+                  </button>
+                </span>
+              </th>
+            {/each}
           </tr>
         </thead>
         <tbody>
@@ -2148,51 +2019,18 @@
                   {formatPercent(row.macroF1)}
                 </strong>
               </td>
-              <td class="number efficiency-cell">
-                {#if row.efficiencyModelSize === null}
-                  <span class="pending">pending</span>
-                {:else}
-                  <strong class:best-score={isBestScore(row, "efficiencyModelSize")}>
-                    {formatIndex(row.efficiencyModelSize)}
+              {#each activeCosts as cost}
+                {@const share = paretoShare(row.id, cost.metric)}
+                {@const config = deploymentMetricConfigs.find((item) => item.metric === cost.metric)}
+                <td class="number efficiency-cell">
+                  <strong class:best-score={share !== null && share > 0 && share === bestParetoShares.get(cost.metric)}>
+                    {formatPercent(share)}
                   </strong>
-                  {#if row.modelSizeMb !== null}
-                    <span>{formatModelSize(row.modelSizeMb)}</span>
+                  {#if !isMcuMetric(cost.metric)}
+                    <span>{formatCost(deviceMean(row.id, cost.metric))} {config?.unit}</span>
                   {/if}
-                {/if}
-              </td>
-              <td class="number efficiency-cell">
-                {#if row.efficiencyPeakMemory === null}
-                  <span class="pending">pending</span>
-                {:else}
-                  <strong class:best-score={isBestScore(row, "efficiencyPeakMemory")}>
-                    {formatIndex(row.efficiencyPeakMemory)}
-                  </strong>
-                  {#if row.peakMemoryMb !== null}
-                    <span>{formatMemory(row.peakMemoryMb)}</span>
-                  {/if}
-                {/if}
-              </td>
-              <td class="number efficiency-cell">
-                {#if row.efficiencyLatency === null}
-                  <span class="pending">pending</span>
-                {:else}
-                  <strong class:best-score={isBestScore(row, "efficiencyLatency")}>
-                    {formatIndex(row.efficiencyLatency)}
-                  </strong>
-                  {#if row.latencyMs !== null}
-                    <span>{formatLatency(row.latencyMs)}</span>
-                  {/if}
-                {/if}
-              </td>
-              <td class="number efficiency-cell">
-                {#if row.efficiencyCombined === null}
-                  <span class="pending">pending</span>
-                {:else}
-                  <strong class:best-score={isBestScore(row, "efficiencyCombined")}>
-                    {formatIndex(row.efficiencyCombined)}
-                  </strong>
-                {/if}
-              </td>
+                </td>
+              {/each}
             </tr>
           {/each}
         </tbody>
@@ -2274,7 +2112,7 @@
                 <td
                   class:pending-cell={cell.macroF1 === null}
                   style={scoreStyle(cell.macroF1)}
-                  title={`${row.name} × ${cell.modelName}: Mean LKSO Macro-f1 ${formatPercent(cell.macroF1)}`}
+                  title={`${row.name} × ${cell.modelName}: Mean Test Macro-f1 ${formatPercent(cell.macroF1)}`}
                 >
                   <strong>{formatMatrixScore(cell.macroF1)}</strong>
                 </td>
@@ -2322,183 +2160,233 @@
   </div>
   {/if}
 
-  {#if activeView === "profiles"}
+  {#if activeView === "deployment"}
   <div
-    id="profiles-view"
-    class="arena-panel profile-panel"
+    id="deployment-view"
+    class="arena-panel"
     role="tabpanel"
-    aria-labelledby="profiles-tab"
+    aria-labelledby="deployment-tab"
   >
     <div class="panel-header">
       <div class="panel-heading">
-        <h2>Dataset Performance Profiles</h2>
-        <p>Compare each model across datasets using Macro-F1 or dataset-level efficiency indices.</p>
-      </div>
-      <div class="profile-controls">
-        <label class="profile-field profile-metric-field">
-          <span>Metric</span>
-          <span class="profile-select">
-            <select bind:value={activeProfileMetric} aria-label="Profile metric">
-              {#each profileMetricConfigs as config}
-                <option value={config.metric}>{config.label}</option>
-              {/each}
-            </select>
-          </span>
-        </label>
-        <label class="profile-field profile-scale-field">
-          <span>Scale</span>
-          <span class="profile-select">
-            <select bind:value={profileScale} aria-label="Profile radial scale">
-              <option value="log">Focused</option>
-              <option value="linear">Linear</option>
-            </select>
-          </span>
-        </label>
+        <h2>Deployment Measurements</h2>
+        <p>
+          Latency, memory, flash, and energy measured on a {deployment.source.devices.phone}, a
+          {deployment.source.devices.watch}, and an {deployment.source.devices.mcu} MCU for
+          {formatWindowSize(selectedWindowSizeSeconds)} windows.
+        </p>
       </div>
     </div>
 
-    {#if profileRows.length >= 3 && profileSeries.length > 0}
-      <div class="profile-layout">
-        <aside class="profile-models" aria-label="Visible model profiles">
-          <h3>Models</h3>
-          <div class="profile-legend">
-            {#each profileSeries as series, seriesIndex}
-              <button
-                type="button"
-                title={series.name}
-                class:highlighted={highlightedProfileModelId === series.id}
-                class:dimmed={highlightedProfileModelId !== null && highlightedProfileModelId !== series.id}
-                onmouseenter={() => (highlightedProfileModelId = series.id)}
-                onmouseleave={() => (highlightedProfileModelId = null)}
-                onfocus={() => (highlightedProfileModelId = series.id)}
-                onblur={() => (highlightedProfileModelId = null)}
-                onclick={() => openModelDetail(series.id)}
-              >
-                <svg class="entity-marker" viewBox="-10 -10 20 20" aria-hidden="true">
-                  <path d={getMarkerPath(series.marker.shape)} fill={series.marker.color} fill-rule="evenodd"></path>
-                </svg>
-                <span>{series.name}</span>
-                <svg class="profile-line-key" viewBox="0 0 30 4" aria-hidden="true">
-                  <line
-                    x1="0"
-                    y1="2"
-                    x2="30"
-                    y2="2"
-                    stroke={series.marker.color}
-                    stroke-dasharray={profileLineDash(seriesIndex)}
-                  ></line>
-                </svg>
-              </button>
-            {/each}
-          </div>
-        </aside>
-
-        <div class="profile-chart-wrap">
-          <svg
-            class="profile-chart"
-            viewBox={`0 0 ${profileBox.width} ${profileBox.height}`}
-            role="img"
-            aria-label={`${activeProfileMetricConfig.label} profiles for ${profileSeries.length} models across ${profileRows.length} datasets`}
-          >
-            <g class="profile-grid" aria-hidden="true">
-              {#each [0.2, 0.4, 0.6, 0.8, 1] as level}
-                <polygon points={profileGridPoints(level, profileRows.length)}></polygon>
-                <text
-                  x={profileBox.centerX + 7}
-                  y={profileBox.centerY - profileBox.radius * level + 13}
-                >{profileScaleLabel(level)}</text>
-              {/each}
-              {#each profileRows as row, index}
-                {@const axisPoint = profilePolarPoint(profileBox.radius, index, profileRows.length)}
-                <line
-                  x1={profileBox.centerX}
-                  y1={profileBox.centerY}
-                  x2={axisPoint.x}
-                  y2={axisPoint.y}
-                ></line>
-              {/each}
-            </g>
-
-            <g class="profile-series">
-              {#each profileSeries as series, seriesIndex}
-                <g
-                  class="profile-series-item"
-                  class:highlighted={highlightedProfileModelId === series.id}
-                  class:dimmed={highlightedProfileModelId !== null && highlightedProfileModelId !== series.id}
-                  role="button"
-                  tabindex="0"
-                  aria-label={`Open model details: ${series.name}`}
-                  onmouseenter={() => (highlightedProfileModelId = series.id)}
-                  onmouseleave={() => (highlightedProfileModelId = null)}
-                  onfocus={() => (highlightedProfileModelId = series.id)}
-                  onblur={() => (highlightedProfileModelId = null)}
-                  onclick={() => openModelDetail(series.id)}
-                  onkeydown={(event) => handleModelRowKeydown(event, series.id)}
-                >
-                  <title>{series.name} · {activeProfileMetricConfig.label}</title>
-                  <path
-                    class="profile-series-area"
-                    d={profileSeriesPath(series.values)}
-                    fill={series.values.some((value) => value === null) ? "none" : series.marker.color}
-                    stroke={series.marker.color}
-                    stroke-dasharray={profileLineDash(seriesIndex)}
-                  ></path>
-                  {#each series.values as value, valueIndex}
-                    {#if value !== null}
-                      {@const point = profileValuePoint(value, valueIndex, series.values.length)}
-                      <g transform={`translate(${point.x} ${point.y}) scale(0.68)`}>
-                        <title>{series.name} × {profileRows[valueIndex]?.name}: {formatProfileValue(value)}</title>
-                        <path
-                          class="profile-series-marker"
-                          d={getMarkerPath(series.marker.shape)}
-                          fill={series.marker.color}
-                          fill-rule="evenodd"
-                        ></path>
-                      </g>
-                    {/if}
+    {#if deploymentSummaryRows.length > 0 && selectedDatasets.length > 0}
+      <section class="deployment-section">
+        <h3>Per model</h3>
+        <div class="table-wrap">
+          <table class="deployment-summary">
+            <thead>
+              <tr>
+                <th rowspan="2">Model</th>
+                <th rowspan="2">Macro-F1</th>
+                <th class="group-heading" colspan="2">Phone (mean)</th>
+                <th class="group-heading" colspan="2">Watch (mean)</th>
+                <th class="group-heading" colspan="5">MCU (relative to {referenceModelName})</th>
+              </tr>
+              <tr>
+                <th>Lat. (ms)</th>
+                <th>Mem. (MB)</th>
+                <th>Lat. (ms)</th>
+                <th>Mem. (MB)</th>
+                <th>Fits</th>
+                <th>Lat.</th>
+                <th>RAM</th>
+                <th>Flash</th>
+                <th>Energy</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each deploymentSummaryRows as row}
+                <tr>
+                  <td>
+                    <button
+                      class="dataset-title-button"
+                      type="button"
+                      onclick={() => openModelDetail(row.id)}
+                    >{row.name}</button>
+                  </td>
+                  <td>{formatPercent(row.macroF1)}</td>
+                  {#each [["phoneLatency", row.phoneLatency], ["phoneMemory", row.phoneMemory], ["watchLatency", row.watchLatency], ["watchMemory", row.watchMemory]] as [key, value]}
+                    <td>
+                      {#if value === deploymentSummaryBest[key as "phoneLatency"] && value !== null}
+                        <strong>{formatCost(value as number)}</strong>
+                      {:else}
+                        {formatCost(value as number | null)}
+                      {/if}
+                    </td>
                   {/each}
-                </g>
+                  <td>{row.fits}/{selectedDatasets.length}</td>
+                  {#each [["mcuLatency", row.mcuLatency], ["mcuRam", row.mcuRam], ["mcuFlash", row.mcuFlash], ["mcuEnergy", row.mcuEnergy]] as [key, value]}
+                    <td class:few-fits={row.fits < mcuMinFits}>
+                      {#if value === deploymentSummaryBest[key as "mcuLatency"] && value !== null && row.fits >= mcuMinFits}
+                        <strong>{formatCost(value as number)}</strong>
+                      {:else}
+                        {value === null ? "×" : formatCost(value as number)}
+                      {/if}
+                    </td>
+                  {/each}
+                </tr>
               {/each}
-            </g>
-
-            <g class="profile-labels">
-              {#each profileRows as row, index}
-                {@const labelPoint = profilePolarPoint(profileBox.labelRadius, index, profileRows.length)}
-                {@const marker = datasetMarker(row.id)}
-                <g
-                  class="profile-dataset-label"
-                  role="button"
-                  tabindex="0"
-                  aria-label={`Open dataset details: ${row.name}`}
-                  onclick={() => openDatasetDetail(row.id)}
-                  onkeydown={(event) => handleDatasetKeydown(event, row.id)}
-                >
-                  <title>{row.name}</title>
-                  <g transform={`translate(${labelPoint.x} ${labelPoint.y - 11}) scale(0.68)`}>
-                    <path d={getMarkerPath(marker.shape)} fill={marker.color} fill-rule="evenodd"></path>
-                  </g>
-                  <text
-                    x={labelPoint.x}
-                    y={labelPoint.y + 9}
-                    text-anchor={profileLabelAnchor(labelPoint.x)}
-                  >{row.name}</text>
-                </g>
-              {/each}
-            </g>
-          </svg>
+            </tbody>
+          </table>
         </div>
-      </div>
-      {#if activeProfileMetric !== "macro_f1"}
-        <p class="profile-measurement-note">
-          Each index is calculated independently for every dataset using models with the required
-          raw measurements. Rankings average each model’s available dataset-level indices. A missing
-          input affects only that model–dataset value; no model-wide fallback is substituted.
+        <p class="view-note">
+          Bold marks the lowest cost per column. MCU ratios are geometric means over the datasets on
+          which a model and {referenceModelName} both fit; below 1 is cheaper. Faded ratios rest on fewer
+          than {mcuMinFits} datasets, and × means the model fits no selected dataset.
         </p>
-      {/if}
+      </section>
+
+      <section class="deployment-section">
+        <div class="panel-header">
+          <h3>Per dataset</h3>
+          <label class="pareto-field pareto-metric-field">
+            <span class="pareto-field-label">Measurement</span>
+            <span class="pareto-select">
+              <select bind:value={activeDeploymentMetric} aria-label="Deployment measurement">
+                {#each deploymentGroups as group}
+                  <optgroup label={group}>
+                    {#each deploymentMetricConfigs.filter((config) => config.group === group) as config}
+                      <option value={config.metric}>{config.group} {config.label.toLowerCase()} ({config.unit})</option>
+                    {/each}
+                  </optgroup>
+                {/each}
+              </select>
+            </span>
+          </label>
+        </div>
+        <div class="table-wrap matrix-wrap">
+          <table class="matrix-table">
+            <thead>
+              <tr>
+                <th class="sticky-col">Dataset</th>
+                {#each visibleModels as model}
+                  <th class="matrix-model-heading" title={model.name}>{model.name}</th>
+                {/each}
+              </tr>
+            </thead>
+            <tbody>
+              {#each deploymentMatrixRows as row}
+                <tr>
+                  <th class="sticky-col dataset-cell">
+                    <button
+                      class="dataset-title-button matrix-dataset-title-button"
+                      type="button"
+                      onclick={() => openDatasetDetail(row.id)}
+                    >{row.name}</button>
+                  </th>
+                  {#each row.cells as cell}
+                    <td
+                      style={deploymentCellStyle(cell.value, row.min, row.max)}
+                      title={`${row.name} × ${cell.modelName}: ${cell.value === null ? cell.reason : `${formatCost(cell.value)} ${activeDeploymentConfig.unit}`}`}
+                    >
+                      {#if cell.flag}
+                        <span class="deployment-flag">{cell.flag}</span>
+                      {:else}
+                        <strong>{formatCost(cell.value)}</strong>
+                      {/if}
+                    </td>
+                  {/each}
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <p class="view-note">
+          Values in {activeDeploymentConfig.unit}. Color runs per dataset on a log scale, green for the
+          cheapest model. F: exceeds the MCU's flash. R: exceeds its RAM. M: the device ran out of
+          memory. E: export or execution failed. These are results rather than gaps.
+        </p>
+      </section>
     {:else}
-      <div class="empty-view">
-        Select at least three datasets and one model to populate the performance profiles.
+      <div class="empty-view">Select at least one dataset and model to show deployment measurements.</div>
+    {/if}
+  </div>
+  {/if}
+
+  {#if activeView === "gap"}
+  <div id="gap-view" class="arena-panel" role="tabpanel" aria-labelledby="gap-tab">
+    <div class="panel-header">
+      <div class="panel-heading">
+        <h2>Generalization Gap to Unseen Subjects</h2>
+        <p>
+          Validation minus test Macro-F1 per dataset. Validation windows come from the training
+          subjects and test windows from held-out subjects, so a large gap points to a strong shift
+          between users.
+        </p>
       </div>
+    </div>
+
+    {#if gapColumns.length > 0}
+      <div class="table-wrap">
+        <svg
+          class="gap-chart"
+          viewBox={`0 0 ${gapBox.width} ${gapBox.height}`}
+          role="img"
+          aria-label={`Generalization gap per dataset for ${formatWindowSize(selectedWindowSizeSeconds)} windows. Largest mean gap: ${gapColumns[0].name}, ${gapColumns[0].mean.toFixed(1)} points.`}
+        >
+          <g class="gap-grid" aria-hidden="true">
+            {#each gapTicks as tick}
+              <line x1={gapBox.left} x2={gapBox.width - gapBox.right} y1={gapY(tick)} y2={gapY(tick)}></line>
+              <text x={gapBox.left - 8} y={gapY(tick)} text-anchor="end" dominant-baseline="middle">{tick}</text>
+            {/each}
+          </g>
+          <text
+            text-anchor="middle"
+            transform={`translate(14 ${(gapBox.top + gapBox.height - gapBox.bottom) / 2}) rotate(-90)`}
+          >Generalization gap (percentage points)</text>
+          {#each gapColumns as column, index}
+            {@const x = gapX(index)}
+            <rect
+              class="gap-range"
+              x={x - 12}
+              width="24"
+              y={gapY(column.mean + column.std)}
+              height={Math.max(0, gapY(column.mean - column.std) - gapY(column.mean + column.std))}
+            ></rect>
+            {#each column.points as point}
+              {@const marker = modelMarker(point.modelId)}
+              <circle
+                class="gap-dot"
+                cx={x + gapJitter(point.modelId)}
+                cy={gapY(point.gap)}
+                r="3.4"
+                fill={marker.color}
+                role="img"
+                tabindex="0"
+                aria-label={`${column.name} × ${point.name}: gap ${point.gap.toFixed(1)} points`}
+                onmouseenter={(event) => showComponentTooltip(event, `${column.name} × ${point.name}: gap ${point.gap.toFixed(1)} pp (val ${formatPercent(point.val)}, test ${formatPercent(point.test)})`)}
+                onmousemove={moveComponentTooltip}
+                onmouseleave={hideComponentTooltip}
+                onfocus={(event) => showComponentTooltip(event, `${column.name} × ${point.name}: gap ${point.gap.toFixed(1)} pp (val ${formatPercent(point.val)}, test ${formatPercent(point.test)})`)}
+                onblur={hideComponentTooltip}
+              ></circle>
+            {/each}
+            <line class="gap-mean" x1={x - 14} x2={x + 14} y1={gapY(column.mean)} y2={gapY(column.mean)}></line>
+            <text
+              text-anchor="end"
+              dominant-baseline="middle"
+              transform={`translate(${x + 3} ${gapBox.height - gapBox.bottom + 8}) rotate(-50)`}
+            >{column.name}</text>
+            <text class="gap-mean-label" x={x} y={gapBox.top - 10} text-anchor="middle">{column.mean.toFixed(1)}</text>
+          {/each}
+        </svg>
+      </div>
+      <p class="view-note">
+        Datasets are sorted by mean gap, given above each column. Dots are models, the tick is the mean
+        over the visible models, and the band spans ±1 standard deviation. Validation scores also pick
+        the early-stopping epoch, so they are slightly optimistic on every dataset.
+      </p>
+    {:else}
+      <div class="empty-view">Select at least one dataset and model to show the generalization gap.</div>
     {/if}
   </div>
   {/if}
@@ -2513,15 +2401,15 @@
       <div class="panel-header">
         <div class="panel-heading">
           <h2>Performance–Efficiency Trade-offs</h2>
-          <p>Explore how predictive performance trades off against latency, peak memory, or model size.</p>
+          <p>Explore how predictive performance trades off against each cost on the device selected in the filters.</p>
         </div>
         <div class="pareto-controls">
           <label class="pareto-field pareto-metric-field">
             <span class="pareto-field-label">X-axis</span>
             <span class="pareto-select">
-              <select bind:value={activeScatterMetric} aria-label="Pareto cost metric">
-                {#each scatterConfigs as config}
-                  <option value={config.metric}>{config.xLabel}</option>
+              <select bind:value={selectedCost} aria-label="Pareto cost metric">
+                {#each activeCosts as cost}
+                  <option value={cost.key}>{selectedDevice === "mcu" ? "MCU" : selectedDevice === "phone" ? "Phone" : "Watch"} {cost.label}</option>
                 {/each}
               </select>
             </span>
@@ -2542,7 +2430,7 @@
         </div>
       </div>
 
-      {#if deploymentTradeoffs && scatterPlot.points.length > 0}
+      {#if scatterPlot.points.length > 0}
         <div class="scatter-grid pareto-grid">
           <article class="scatter-plot pareto-plot">
             <h3>{scatterPlot.title}</h3>
@@ -2627,7 +2515,7 @@
                 text-anchor="middle"
                 transform={`translate(14 ${(plotBox.top + plotBox.height - plotBox.bottom) / 2}) rotate(-90)`}
               >
-                Mean LKSO Macro-f1
+                Mean Test Macro-f1
               </text>
               {#if showParetoFrontier && scatterPlot.frontierPoints.length > 1}
                 <path
@@ -2665,8 +2553,55 @@
                 {/each}
               </g>
             </svg>
+            {#if isMcuMetric(activeScatterMetric)}
+              <p class="view-note">
+                Models fit different datasets, so absolute MCU costs are not comparable. Each cost is
+                the geometric mean ratio to {referenceModelName} on the datasets where both fit
+                (1 = same cost). Macro-F1 uses all selected datasets, and models that fit no dataset
+                are omitted{scatterPlot.missingCount > 0 ? ` (${scatterPlot.missingCount} here)` : ""}.
+                See the Deployment tab for fit counts.
+              </p>
+            {/if}
           </article>
         </div>
+        <section class="pareto-membership">
+          <h3>Per-dataset Pareto fronts: {activeCost.label}</h3>
+          <div class="table-wrap">
+            <table class="pareto-matrix">
+              <thead>
+                <tr>
+                  <th class="pareto-matrix-model">Model</th>
+                  {#each paretoMatrixDatasets as dataset}
+                    <th class="pareto-matrix-dataset" title={dataset.name}><span>{dataset.name}</span></th>
+                  {/each}
+                  <th class="pareto-matrix-share">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each paretoMatrixRows as row}
+                  <tr>
+                    <th class="pareto-matrix-model">
+                      <button class="dataset-title-button" type="button" onclick={() => openModelDetail(row.id)}>{row.name}</button>
+                    </th>
+                    {#each paretoMatrixDatasets as dataset}
+                      {@const on = isOnParetoFront(row.id, dataset.id, activeScatterMetric)}
+                      <td
+                        class:on-front={on}
+                        title={`${row.name} × ${dataset.name}: ${on ? "on the Pareto front" : "not on the front"}`}
+                      ></td>
+                    {/each}
+                    <td class="pareto-matrix-share">{formatPercent(row.share)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+          <p class="view-note">
+            A filled cell means the model lies on that dataset's front of test Macro-F1 against
+            {activeCost.label}, computed on that dataset alone. Models are sorted by
+            their share of fronts and datasets by mean Macro-F1.{selectedDevice === "mcu" ? " Only models that fit on the MCU compete." : ""}
+          </p>
+        </section>
       {:else}
         <div class="empty-view">
           Select at least one model and dataset with deployment measurements to draw the Pareto frontier.
@@ -2976,7 +2911,7 @@
 
   .view-switcher {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0;
     min-width: 0;
     border: 0;
@@ -3096,7 +3031,7 @@
 
   .filter-content {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 14px;
     padding: 14px 16px 16px;
   }
@@ -3996,6 +3931,8 @@
     text-transform: none;
     white-space: nowrap;
     writing-mode: vertical-rl;
+    max-height: none;
+    overflow: visible;
     transform: rotate(180deg);
   }
 
@@ -4150,265 +4087,6 @@
   .dataset-title-button:focus-visible {
     outline: 2px solid hsl(24 6% 17% / 0.28);
     outline-offset: -2px;
-  }
-
-  .profile-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    justify-content: flex-end;
-    gap: 10px 16px;
-  }
-
-  .profile-field {
-    display: grid;
-    gap: 5px;
-  }
-
-  .profile-metric-field {
-    width: 220px;
-  }
-
-  .profile-scale-field {
-    width: 132px;
-  }
-
-  .profile-field > span:first-child {
-    color: var(--muted);
-    font-size: 0.68rem;
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-
-  .profile-select {
-    position: relative;
-    display: block;
-  }
-
-  .profile-select::after {
-    position: absolute;
-    top: 50%;
-    right: 12px;
-    width: 7px;
-    height: 7px;
-    border-right: 1.5px solid var(--muted);
-    border-bottom: 1.5px solid var(--muted);
-    content: "";
-    pointer-events: none;
-    transform: translateY(-70%) rotate(45deg);
-  }
-
-  .profile-select select {
-    width: 100%;
-    min-height: 36px;
-    appearance: none;
-    border: 1px solid var(--line-strong);
-    border-radius: 8px;
-    background: var(--panel-soft);
-    color: var(--ink);
-    padding: 0 34px 0 10px;
-    font: inherit;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-
-  .profile-select select:hover {
-    border-color: var(--accent);
-    background: var(--panel);
-  }
-
-  .profile-select select:focus-visible {
-    outline: 2px solid hsl(24 6% 17% / 0.28);
-    outline-offset: 2px;
-  }
-
-  .profile-layout {
-    display: grid;
-    grid-template-columns: 260px minmax(0, 1fr);
-    gap: 16px;
-    align-items: center;
-    padding: 16px;
-  }
-
-  .profile-models {
-    display: grid;
-    min-width: 0;
-    align-self: center;
-    gap: 8px;
-    border-right: 1px solid var(--line);
-    padding-right: 12px;
-  }
-
-  .profile-models h3 {
-    margin: 0;
-    color: var(--ink);
-    font-size: 0.76rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .profile-chart-wrap {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    justify-content: center;
-    overflow-x: auto;
-  }
-
-  .profile-chart {
-    display: block;
-    width: min(100%, 1020px);
-    min-width: 680px;
-    height: auto;
-    margin: 0 auto;
-  }
-
-  .profile-grid polygon,
-  .profile-grid line {
-    fill: none;
-    stroke: var(--line);
-    stroke-width: 1;
-  }
-
-  .profile-grid polygon:last-of-type {
-    stroke: var(--line-strong);
-    stroke-width: 1.4;
-  }
-
-  .profile-grid text {
-    fill: var(--muted);
-    font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 10px;
-  }
-
-  .profile-series-item {
-    cursor: pointer;
-    opacity: 0.82;
-    transition: opacity 120ms ease;
-  }
-
-  .profile-series-area {
-    fill-opacity: 0.035;
-    stroke-width: 2;
-    stroke-linejoin: round;
-    vector-effect: non-scaling-stroke;
-    transition:
-      fill-opacity 120ms ease,
-      stroke-width 120ms ease;
-  }
-
-  .profile-series-marker {
-    stroke: var(--panel);
-    stroke-width: 1.8;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .profile-series-item.highlighted {
-    opacity: 1;
-  }
-
-  .profile-series-item.highlighted .profile-series-area {
-    fill-opacity: 0.13;
-    stroke-width: 3;
-  }
-
-  .profile-series-item.dimmed {
-    opacity: 0.1;
-  }
-
-  .profile-dataset-label {
-    cursor: pointer;
-    outline: none;
-  }
-
-  .profile-dataset-label path {
-    stroke: var(--panel);
-    stroke-width: 1.8;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .profile-dataset-label text {
-    fill: var(--muted-strong);
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .profile-dataset-label:hover text,
-  .profile-dataset-label:focus-visible text {
-    fill: var(--ink);
-    text-decoration: underline;
-  }
-
-  .profile-legend {
-    display: grid;
-    align-content: start;
-    gap: 4px;
-    max-height: 650px;
-    padding: 0 4px 0 0;
-    overflow-y: auto;
-  }
-
-  .profile-legend button {
-    display: grid;
-    grid-template-columns: 16px minmax(0, 1fr) 30px;
-    align-items: center;
-    gap: 7px;
-    min-height: 34px;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--muted-strong);
-    padding: 4px 6px;
-    font: inherit;
-    font-size: 0.76rem;
-    font-weight: 600;
-    text-align: left;
-    cursor: pointer;
-    transition:
-      border-color 120ms ease,
-      background-color 120ms ease,
-      opacity 120ms ease;
-  }
-
-  .profile-legend button:hover,
-  .profile-legend button:focus-visible,
-  .profile-legend button.highlighted {
-    border-color: var(--line-strong);
-    background: var(--panel-soft);
-    color: var(--ink);
-    outline: none;
-  }
-
-  .profile-legend button.dimmed {
-    opacity: 0.28;
-  }
-
-  .profile-legend button > span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .profile-line-key {
-    width: 30px;
-    height: 4px;
-    justify-self: end;
-    overflow: visible;
-  }
-
-  .profile-line-key line {
-    stroke-width: 2;
-  }
-
-  .profile-measurement-note {
-    margin: 0;
-    border-top: 1px solid var(--line);
-    color: var(--muted);
-    padding: 11px 16px 13px;
-    font-size: 0.76rem;
-    line-height: 1.45;
   }
 
   .scatter-grid {
@@ -4923,23 +4601,6 @@
       grid-template-columns: 1fr;
     }
 
-    .profile-layout {
-      grid-template-columns: 220px minmax(0, 1fr);
-      gap: 10px;
-      padding: 12px;
-    }
-
-    .profile-legend {
-      grid-template-columns: 1fr;
-      max-height: 590px;
-      padding: 0 4px 0 0;
-    }
-  }
-
-  @media (max-width: 900px) {
-    .filter-content {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
   }
 
   @media (max-width: 760px) {
@@ -4955,41 +4616,14 @@
     .view-switcher button {
       min-height: 52px;
       padding: 5px 3px;
+      font-size: 0.66rem;
+      overflow-wrap: anywhere;
       font-size: 0.68rem;
       line-height: 1.18;
     }
 
     .view-switcher {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
-    .profile-controls {
-      width: 100%;
-      align-items: stretch;
-      justify-content: start;
-    }
-
-    .profile-field {
-      width: 100%;
-    }
-
-    .profile-layout {
-      grid-template-columns: 1fr;
-      gap: 12px;
-      padding: 12px 8px;
-    }
-
-    .profile-models {
-      align-self: stretch;
-      border-right: 0;
-      border-bottom: 1px solid var(--line);
-      padding: 0 4px 10px;
-    }
-
-    .profile-legend {
-      grid-template-columns: 1fr;
-      max-height: 260px;
-      padding: 0 4px 0 0;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
     }
 
     .pareto-controls {
@@ -5057,5 +4691,155 @@
     .detail-metrics {
       grid-template-columns: 1fr;
     }
+  }
+  .deployment-section {
+    padding: 14px 16px;
+  }
+
+  .deployment-section h3 {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+  }
+
+  .deployment-summary td,
+  .deployment-summary th {
+    white-space: nowrap;
+    text-align: right;
+    padding: 6px 10px;
+  }
+
+  .deployment-summary th:first-child,
+  .deployment-summary td:first-child {
+    text-align: left;
+  }
+
+  .deployment-summary .group-heading {
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .deployment-summary .few-fits {
+    opacity: 0.5;
+  }
+
+  .deployment-flag {
+    color: var(--muted, #6b6963);
+    font-weight: 500;
+  }
+
+  #gap-view .view-note {
+    padding: 0 16px 14px;
+  }
+
+  .view-note {
+    margin: 10px 0 0;
+    color: var(--muted, #6b6963);
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+
+  .gap-chart {
+    display: block;
+    width: 100%;
+    min-width: 860px;
+    height: auto;
+  }
+
+  .gap-chart text {
+    fill: currentColor;
+    font-size: 11px;
+  }
+
+  .gap-grid line {
+    stroke: var(--line);
+  }
+
+  .gap-range {
+    fill: currentColor;
+    opacity: 0.12;
+  }
+
+  .gap-mean {
+    stroke: currentColor;
+    stroke-width: 2.5;
+  }
+
+  .gap-chart .gap-mean-label {
+    font-size: 9.5px;
+    opacity: 0.75;
+  }
+
+  .gap-dot:hover,
+  .gap-dot:focus-visible {
+    stroke: currentColor;
+    stroke-width: 1.5;
+    outline: none;
+  }
+  .pareto-membership {
+    padding: 14px 16px;
+  }
+
+  .pareto-membership h3 {
+    margin: 0 0 8px;
+    font-size: 0.95rem;
+  }
+
+  .pareto-matrix {
+    border-collapse: separate;
+    border-spacing: 2px;
+    width: auto;
+    margin: 0;
+  }
+
+  .pareto-matrix th,
+  .pareto-matrix td {
+    height: 20px;
+    padding: 0;
+    border: 0;
+  }
+
+  .pareto-matrix tbody td {
+    width: 20px;
+    min-width: 20px;
+    background: var(--line);
+  }
+
+  .pareto-matrix tbody td.on-front {
+    background: #2a78d6;
+  }
+
+  .pareto-matrix .pareto-matrix-model {
+    padding-right: 10px;
+    text-align: left;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
+  .pareto-matrix thead .pareto-matrix-dataset {
+    height: auto;
+    overflow: visible;
+    vertical-align: bottom;
+  }
+
+  .pareto-matrix-dataset span {
+    display: inline-block;
+    writing-mode: vertical-rl;
+    max-height: none;
+    overflow: visible;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    font-size: 0.72rem;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .pareto-matrix tbody td.pareto-matrix-share,
+  .pareto-matrix th.pareto-matrix-share {
+    width: auto;
+    padding-left: 10px;
+    background: none;
+    text-align: right;
+    white-space: nowrap;
+    vertical-align: bottom;
   }
 </style>

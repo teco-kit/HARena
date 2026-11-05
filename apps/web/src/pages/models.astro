@@ -70,6 +70,8 @@ const modelYearById: Record<string, number> = {
   deepconv_lstm: 2016,
   deepconv_lstm_attention: 2018,
   deepconv_lstm_iswc: 2021,
+  liteway: 2026,
+  liteway_light: 2026,
   dynamic_whar: 2022,
   lstms_ensemble: 2017,
   mlp_har: 2024,
@@ -161,8 +163,8 @@ const frameworkOptions = [...new Set(models.map((model) => model.framework))]
   .map((id) => ({ id, name: formatFramework(id) }));
 const paramsMax = roundMetricMax(models.map((model) => model.paramsValue));
 const flopsMax = roundMetricMax(models.map((model) => model.flopsValue));
-const snapshotDate = "May 1, 2026";
-const snapshotDateTime = "2026-05-01";
+const snapshotDate = "November 2, 2026";
+const snapshotDateTime = "2026-11-02";
 
 function formatFramework(framework: string) {
   const labels: Record<string, string> = {

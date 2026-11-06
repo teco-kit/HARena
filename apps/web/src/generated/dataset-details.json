@@ -1,13 +1,12 @@
 {
   "source": {
-    "table": "Table 3",
-    "note": "Dataset statistics are copied from Table 3 of the WHAR Arena paper.",
-    "abbreviations": "ADL=Activities of Daily Living, Loc=Locomotion, Fit=Fitness, Fall=Fall Detection, Acc=Accelerometer, Gyr=Gyroscope, Mag=Magnetometer, ECG=Electrocardiogram, EEG=Electroencephalogram, EMG=Electromyogram, GPS=Global Pos. System, Stretch=Stretch Sensor, Baro=Barometer, Light=Light Sensor, Resp=Respiration Sensor, Gas=Gas Sensor, Flow=Airflow Sensor."
+    "table": "Dataset suite table",
+    "note": "Dataset statistics follow the dataset suite table of the HARENA paper.",
+    "abbreviations": "ADL=Activities of Daily Living, Loc=Locomotion, Fit=Fitness, Fall=Fall Detection, Sports=Sports, Acc=Accelerometer, Gyr=Gyroscope, Mag=Magnetometer, ECG=Electrocardiogram, EEG=Electroencephalogram, EMG=Electromyogram, GPS=Global Pos. System, Stretch=Stretch Sensor, Baro=Barometer, ALS=Ambient Light Sensor, HR=Heart Rate, Resp=Respiration Sensor, Gas=Gas Sensor, Flow=Airflow Sensor."
   },
   "datasets": {
     "wisdm": {
       "year": 2010,
-      "citations": 3862,
       "subjects": 36,
       "activities": 6,
       "settings": "ADL, Loc",
@@ -17,7 +16,6 @@
     },
     "uci_har": {
       "year": 2013,
-      "citations": 3372,
       "subjects": 30,
       "activities": 6,
       "settings": "ADL, Loc",
@@ -27,7 +25,6 @@
     },
     "actrectut_gestures": {
       "year": 2014,
-      "citations": 2086,
       "subjects": 2,
       "activities": 11,
       "settings": "ADL, Fit",
@@ -37,19 +34,17 @@
     },
     "pamap2": {
       "year": 2012,
-      "citations": 1758,
       "subjects": 9,
-      "activities": 13,
+      "activities": 12,
       "settings": "ADL, Loc, Fit",
       "deviceTypes": "Node",
-      "sensorModalities": "Acc, Gyr, Mag, ECG",
+      "sensorModalities": "Acc, Gyr, Mag, HR",
       "channels": 52
     },
     "opportunity": {
       "year": 2010,
-      "citations": 1024,
       "subjects": 4,
-      "activities": 18,
+      "activities": 4,
       "settings": "ADL, Loc",
       "deviceTypes": "Node",
       "sensorModalities": "Acc, Gyr, Mag",
@@ -57,7 +52,6 @@
     },
     "hhar": {
       "year": 2015,
-      "citations": 1019,
       "subjects": 9,
       "activities": 6,
       "settings": "ADL, Loc, Fit",
@@ -67,7 +61,6 @@
     },
     "utd_mhad": {
       "year": 2015,
-      "citations": 997,
       "subjects": 8,
       "activities": 27,
       "settings": "ADL, Loc, Fit",
@@ -77,9 +70,8 @@
     },
     "hapt": {
       "year": 2016,
-      "citations": 939,
       "subjects": 30,
-      "activities": 6,
+      "activities": 12,
       "settings": "ADL, Loc",
       "deviceTypes": "Phone",
       "sensorModalities": "Acc, Gyr",
@@ -87,9 +79,8 @@
     },
     "mhealth": {
       "year": 2014,
-      "citations": 887,
       "subjects": 10,
-      "activities": 13,
+      "activities": 12,
       "settings": "ADL, Loc, Fit, Health",
       "deviceTypes": "Node",
       "sensorModalities": "Acc, Gyr, Mag, ECG",
@@ -97,7 +88,6 @@
     },
     "dsads": {
       "year": 2010,
-      "citations": 780,
       "subjects": 8,
       "activities": 19,
       "settings": "ADL, Loc, Fit",
@@ -107,7 +97,6 @@
     },
     "usc_had": {
       "year": 2012,
-      "citations": 753,
       "subjects": 14,
       "activities": 12,
       "settings": "ADL, Loc, Fit",
@@ -117,7 +106,6 @@
     },
     "sad": {
       "year": 2014,
-      "citations": 752,
       "subjects": 10,
       "activities": 7,
       "settings": "ADL, Loc, Fit",
@@ -127,7 +115,6 @@
     },
     "unimib_shar": {
       "year": 2017,
-      "citations": 712,
       "subjects": 30,
       "activities": 17,
       "settings": "ADL, Fall",
@@ -137,9 +124,8 @@
     },
     "daphnet": {
       "year": 2009,
-      "citations": 652,
       "subjects": 10,
-      "activities": 3,
+      "activities": 2,
       "settings": "Health, Loc",
       "deviceTypes": "Node",
       "sensorModalities": "Acc",
@@ -147,7 +133,6 @@
     },
     "real_world": {
       "year": 2016,
-      "citations": 482,
       "subjects": 15,
       "activities": 8,
       "settings": "ADL, Loc, Fit",
@@ -157,17 +142,15 @@
     },
     "up_fall": {
       "year": 2019,
-      "citations": 462,
       "subjects": 17,
       "activities": 11,
       "settings": "ADL, Fall",
       "deviceTypes": "Node, Helmet",
-      "sensorModalities": "Acc, Gyr, Light Sensor, EEG",
+      "sensorModalities": "Acc, Gyr, ALS, EEG",
       "channels": 42
     },
     "motion_sense": {
       "year": 2019,
-      "citations": 345,
       "subjects": 24,
       "activities": 6,
       "settings": "ADL, Loc",
@@ -177,7 +160,6 @@
     },
     "uma_fall": {
       "year": 2017,
-      "citations": 243,
       "subjects": 19,
       "activities": 15,
       "settings": "ADL, Fall",
@@ -187,9 +169,8 @@
     },
     "real_disp": {
       "year": 2014,
-      "citations": 216,
       "subjects": 17,
-      "activities": 34,
+      "activities": 33,
       "settings": "ADL, Loc, Fit",
       "deviceTypes": "Node",
       "sensorModalities": "Acc, Gyr, Mag",
@@ -197,7 +178,6 @@
     },
     "real_life_har": {
       "year": 2020,
-      "citations": 208,
       "subjects": 17,
       "activities": 4,
       "settings": "ADL, Loc",
@@ -207,7 +187,6 @@
     },
     "wisdm_19_phone": {
       "year": 2019,
-      "citations": 198,
       "subjects": 51,
       "activities": 18,
       "settings": "ADL, Loc",
@@ -217,7 +196,6 @@
     },
     "wisdm_19_watch": {
       "year": 2019,
-      "citations": 198,
       "subjects": 51,
       "activities": 18,
       "settings": "ADL, Loc",
@@ -227,9 +205,8 @@
     },
     "hugadb": {
       "year": 2018,
-      "citations": 154,
       "subjects": 18,
-      "activities": 12,
+      "activities": 10,
       "settings": "ADL, Loc, Fit",
       "deviceTypes": "Node",
       "sensorModalities": "Acc, Gyr, EMG",
@@ -237,7 +214,6 @@
     },
     "harth": {
       "year": 2021,
-      "citations": 132,
       "subjects": 22,
       "activities": 12,
       "settings": "ADL, Loc, Fit",
@@ -247,9 +223,8 @@
     },
     "w_har": {
       "year": 2020,
-      "citations": 100,
       "subjects": 22,
-      "activities": 9,
+      "activities": 8,
       "settings": "ADL, Loc",
       "deviceTypes": "Node",
       "sensorModalities": "Acc, Gyr, Mag, Stretch",
@@ -257,39 +232,35 @@
     },
     "wear": {
       "year": 2024,
-      "citations": 66,
       "subjects": 24,
       "activities": 18,
-      "settings": "Fit",
+      "settings": "Fit, Sports",
       "deviceTypes": "Watch",
       "sensorModalities": "Acc",
       "channels": 12
     },
     "har70": {
       "year": 2021,
-      "citations": 55,
       "subjects": 18,
       "activities": 7,
       "settings": "ADL, Loc, Health",
-      "deviceTypes": "Node",
+      "deviceTypes": "Activity Tracker",
       "sensorModalities": "Acc",
       "channels": 6
     },
     "hang_time": {
       "year": 2023,
-      "citations": 52,
       "subjects": 24,
-      "activities": 6,
-      "settings": "Fit",
+      "activities": 4,
+      "settings": "Fit, Sports",
       "deviceTypes": "Watch",
       "sensorModalities": "Acc",
       "channels": 3
     },
     "uca_ehar": {
       "year": 2022,
-      "citations": 35,
       "subjects": 20,
-      "activities": 12,
+      "activities": 11,
       "settings": "ADL, Loc, Fit",
       "deviceTypes": "Glasses",
       "sensorModalities": "Acc, Gyr, Baro",
@@ -297,13 +268,21 @@
     },
     "gotov": {
       "year": 2022,
-      "citations": 33,
-      "subjects": 31,
+      "subjects": 30,
       "activities": 16,
       "settings": "ADL, Loc, Fit, Health",
-      "deviceTypes": "Node, Vest, Mask, Belt",
-      "sensorModalities": "Acc, ECG, Resp, Gas, Flow",
+      "deviceTypes": "Node, Others",
+      "sensorModalities": "Acc, ECG, Resp, HR",
       "channels": 28
+    },
+    "aicos_har": {
+      "year": 2026,
+      "subjects": 94,
+      "activities": 11,
+      "settings": "ADL, Loc",
+      "deviceTypes": "Phone, Wearable",
+      "sensorModalities": "Acc, Gyr, Mag, Baro",
+      "channels": 10
     }
   }
 }
